@@ -1,9 +1,9 @@
 module Main (main) where
 
-import Plutarch.MerkleTree qualified
 import Data.Default (
   def,
  )
+import Plutarch.MerkleTree qualified
 import Ply.Plutarch (
   writeTypedScript,
  )

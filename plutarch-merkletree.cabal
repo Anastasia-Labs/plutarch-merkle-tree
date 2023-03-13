@@ -106,6 +106,7 @@ library
     , bytestring
     , cardano-binary
     , data-default
+    , liqwid-plutarch-extra
     , plutarch
     , plutarch-extra
     , plutus-core
@@ -114,7 +115,6 @@ library
     , plutus-tx
     , ply-core
     , ply-plutarch
-    , liqwid-plutarch-extra
     , serialise
     , text
 

@@ -2,9 +2,9 @@
 
 module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..)) where
 
-import Plutarch.Api.V2
-  ( PValidator,
-  )
+import Plutarch.Api.V2 (
+  PValidator,
+ )
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
 import Plutarch.Prelude
 
@@ -28,7 +28,7 @@ data PMerkleTree (s :: S)
 
 instance DerivePlutusType PMerkleTree where type DPTStrat _ = PlutusTypeScott
 
-instance PEq (PMerkleTree) where
+instance PEq PMerkleTree where
   l' #== r' =
     phoistAcyclic
       ( plam $ \l r ->
@@ -36,8 +36,8 @@ instance PEq (PMerkleTree) where
             PMerkleEmpty -> pmatch r $ \case
               PMerkleEmpty -> pcon PTrue
               _ -> pcon PFalse
-            PMerkleNode _ _ _ -> undefined
-            PMerkleLeaf _ _ -> undefined
+            PMerkleNode {} -> pcon PFalse
+            PMerkleLeaf _ _ -> pcon PFalse
       )
       # l'
       # r'
