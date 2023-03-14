@@ -1,12 +1,16 @@
 module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..), phash, pmember, mkProof, proof, isMember) where
 
-import Plutarch.Api.V2
-  ( PValidator,
-  )
-import Plutarch.Prelude
+import Plutarch.Api.V2 (
+  PValidator,
+ )
+import Plutarch.Extra.Applicative ((#<!>))
+import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
 import Plutarch.Maybe (pfromJust)
+import Plutarch.Prelude
 
 -- import Plutarch.Bool (PPartialOrd)
+-- import "plutarch-extra" Plutarch.Extra.List (preverse)
+-- import Numeric.Natural (Natural)
 
 newtype PHash (s :: S) = PHash (Term s PByteString)
   deriving stock (Generic)
@@ -54,6 +58,30 @@ instance PEq PMerkleTree where
       # l'
       # r'
 
+_pfromList :: forall (s :: S). Term s (PList PByteString :--> PMerkleTree)
+_pfromList = phoistAcyclic $
+  plam $ \x ->
+    let go = pfix #$ plam $ \_self len list ->
+          pmatch list $ \case
+            PSNil -> pcon PMerkleEmpty
+            ls ->
+              pif
+                (pisSingleton #$ pcon ls)
+                -- (pmatch (pcon ls ) $ \(PSCons v _) -> pcon $ PMerkleLeaf (phash # v) v)
+                (plet (phead #$ pcon ls) $ \v -> pcon $ PMerkleLeaf (phash # v) v)
+                ( plet (pdiv # len # 2) $ \_cutoff ->
+                    -- let left = pdrop (cutoff ) $ preverse # pcon ls
+                    -- in
+                    pcon PMerkleEmpty
+                    -- let left = preverse $ pdrop cutoff $ preverse ls
+                    --     right = pdrop cutoff ls
+                    --     leftnode = self # cutoff # left
+                    --     rightnode = self # cutoff # right
+                    --  in PMerkleNode (prootHash # leftnode) leftnode rightnode
+                )
+     in -- (undefined)
+        go # (plength # x) # x
+
 type PProof = PList (PEither PHash PHash)
 
 prootHash :: forall (s :: S). Term s (PMerkleTree :--> PHash)
@@ -63,14 +91,14 @@ prootHash = phoistAcyclic $ plam $ \m ->
     PMerkleLeaf h _ -> h
     PMerkleNode h _ _ -> h
 
-peitherOf :: forall (s :: S) (a :: PType). Term s (PMaybe a :--> PMaybe a :--> PMaybe a)
-peitherOf = phoistAcyclic $
+_peitherOf :: forall (s :: S) (a :: PType). Term s (PMaybe a :--> PMaybe a :--> PMaybe a)
+_peitherOf = phoistAcyclic $
   plam $ \l r ->
     pmatch l $ \case
       PJust x -> pcon $ PJust x
       PNothing -> pmatch r $ \case
         PJust y -> pcon $ PJust y
-        PNothing -> pcon $ PNothing
+        PNothing -> pcon PNothing
 
 mkProof :: forall (s :: S). Term s (PByteString :--> PMerkleTree :--> PMaybe PProof)
 mkProof = phoistAcyclic $
@@ -83,8 +111,8 @@ mkProof = phoistAcyclic $
                 (h #== he)
                 (pcon $ PJust es)
                 (pcon PNothing)
-            PMerkleNode _ l r -> peitherOf # (self # pcon (PSCons (pcon $ PRight (prootHash # r)) es) # l) # (self # pcon (PSCons (pcon $ PLeft (prootHash # l)) es) # r)
-     in go # (pcon PSNil)
+            PMerkleNode _ l r -> (self # pcon (PSCons (pcon $ PRight (prootHash # r)) es) # l) #<!> (self # pcon (PSCons (pcon $ PLeft (prootHash # l)) es) # r)
+     in go # pcon PSNil
 
 pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
 pmember = phoistAcyclic $
@@ -105,13 +133,13 @@ validator :: ClosedTerm PValidator
 validator = plam $ \_ _ _ -> popaque $ pconstant True
 
 mt :: forall {s :: S}. Term s PMerkleTree
-mt = pcon $ (PMerkleLeaf (phash #$ phexByteStr "41") (phexByteStr "41"))
+mt = pcon $ PMerkleLeaf (phash #$ phexByteStr "41") (phexByteStr "41")
 
-proof :: forall {s :: S}. Term s (PProof)
-proof = pfromJust #$ mkProof # (phexByteStr "41") # mt
+proof :: forall {s :: S}. Term s PProof
+proof = pfromJust #$ mkProof # phexByteStr "41" # mt
 
 rh :: forall {s :: S}. Term s PHash
 rh = prootHash # mt
 
 isMember :: forall {s :: S}. Term s PBool
-isMember = pmember # (phexByteStr "41") # rh # proof
+isMember = pmember # phexByteStr "41" # rh # proof

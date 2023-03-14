@@ -95,7 +95,7 @@ common lang
 
 library
   import:          lang
-  exposed-modules: 
+  exposed-modules:
     Plutarch.MerkleTree
     Utils
 
@@ -103,6 +103,7 @@ library
 
   build-depends:
     , aeson
+    , aeson-pretty
     , base
     , base16-bytestring
     , bytestring
@@ -119,7 +120,6 @@ library
     , ply-plutarch
     , serialise
     , text
-    , aeson-pretty
 
   hs-source-dirs:  src
 
