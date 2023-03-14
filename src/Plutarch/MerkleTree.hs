@@ -1,9 +1,10 @@
-module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..), phash, pmember) where
+module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..), phash, pmember, mkProof, proof, isMember) where
 
-import Plutarch.Api.V2 (
-  PValidator,
- )
+import Plutarch.Api.V2
+  ( PValidator,
+  )
 import Plutarch.Prelude
+import Plutarch.Maybe (pfromJust)
 
 -- import Plutarch.Bool (PPartialOrd)
 
@@ -55,8 +56,35 @@ instance PEq PMerkleTree where
 
 type PProof = PList (PEither PHash PHash)
 
--- mkProof :: forall (s :: S). Term s (PByteString :--> PMerkleTree :--> PMaybe PProof)
--- mkProof = undefined
+prootHash :: forall (s :: S). Term s (PMerkleTree :--> PHash)
+prootHash = phoistAcyclic $ plam $ \m ->
+  pmatch m $ \case
+    PMerkleEmpty -> mempty
+    PMerkleLeaf h _ -> h
+    PMerkleNode h _ _ -> h
+
+peitherOf :: forall (s :: S) (a :: PType). Term s (PMaybe a :--> PMaybe a :--> PMaybe a)
+peitherOf = phoistAcyclic $
+  plam $ \l r ->
+    pmatch l $ \case
+      PJust x -> pcon $ PJust x
+      PNothing -> pmatch r $ \case
+        PJust y -> pcon $ PJust y
+        PNothing -> pcon $ PNothing
+
+mkProof :: forall (s :: S). Term s (PByteString :--> PMerkleTree :--> PMaybe PProof)
+mkProof = phoistAcyclic $
+  plam $ \bs -> plet (phash # bs) $ \he ->
+    let go = pfix #$ plam $ \self es merkT ->
+          pmatch merkT $ \case
+            PMerkleEmpty -> pcon PNothing
+            PMerkleLeaf h _ ->
+              pif
+                (h #== he)
+                (pcon $ PJust es)
+                (pcon PNothing)
+            PMerkleNode _ l r -> peitherOf # (self # pcon (PSCons (pcon $ PRight (prootHash # r)) es) # l) # (self # pcon (PSCons (pcon $ PLeft (prootHash # l)) es) # r)
+     in go # (pcon PSNil)
 
 pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
 pmember = phoistAcyclic $
@@ -75,3 +103,15 @@ phash = phoistAcyclic $ plam $ \bs ->
 
 validator :: ClosedTerm PValidator
 validator = plam $ \_ _ _ -> popaque $ pconstant True
+
+mt :: forall {s :: S}. Term s PMerkleTree
+mt = pcon $ (PMerkleLeaf (phash #$ phexByteStr "41") (phexByteStr "41"))
+
+proof :: forall {s :: S}. Term s (PProof)
+proof = pfromJust #$ mkProof # (phexByteStr "41") # mt
+
+rh :: forall {s :: S}. Term s PHash
+rh = prootHash # mt
+
+isMember :: forall {s :: S}. Term s PBool
+isMember = pmember # (phexByteStr "41") # rh # proof

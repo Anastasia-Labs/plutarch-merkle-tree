@@ -95,7 +95,9 @@ common lang
 
 library
   import:          lang
-  exposed-modules: Plutarch.MerkleTree
+  exposed-modules: 
+    Plutarch.MerkleTree
+    Utils
 
   -- Compile
 
@@ -117,6 +119,7 @@ library
     , ply-plutarch
     , serialise
     , text
+    , aeson-pretty
 
   hs-source-dirs:  src
 
