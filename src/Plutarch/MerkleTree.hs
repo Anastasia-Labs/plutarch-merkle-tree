@@ -69,21 +69,6 @@ pmember = phoistAcyclic $
               PRight r -> self # (root' <> r) # xs
      in go # (phash # bs)
 
--- member :: BuiltinByteString -> Hash -> Proof -> Bool
--- member e root = go (hash e)
---  where
---   go root' = \case
---     [] -> root' == root
---     Left l : q -> go (combineHash l root') q
---     Right r : q -> go (combineHash root' r) q
-
--- test :: Integer -> Maybe Integer -> Bool
--- test _i = go (_i)
---   where
---     go (_i') = \case
---       Just _ -> True
---       Nothing -> False
-
 phash :: forall (s :: S). Term s (PByteString :--> PHash)
 phash = phoistAcyclic $ plam $ \bs ->
   pcon $ PHash (psha2_256 # bs)
