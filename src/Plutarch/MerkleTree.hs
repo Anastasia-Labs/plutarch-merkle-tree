@@ -1,11 +1,8 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..), phash, pmember) where
 
-module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..),phash) where
-
-import Plutarch.Api.V2
-  ( PValidator,
-  )
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
+import Plutarch.Api.V2 (
+  PValidator,
+ )
 import Plutarch.Prelude
 
 -- import Plutarch.Bool (PPartialOrd)
@@ -55,6 +52,37 @@ instance PEq PMerkleTree where
       )
       # l'
       # r'
+
+type PProof = PList (PEither PHash PHash)
+
+-- mkProof :: forall (s :: S). Term s (PByteString :--> PMerkleTree :--> PMaybe PProof)
+-- mkProof = undefined
+
+pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
+pmember = phoistAcyclic $
+  plam $ \bs root ->
+    let go = pfix #$ plam $ \self root' proof ->
+          pmatch proof $ \case
+            PSNil -> root' #== root
+            PSCons x xs -> pmatch x $ \case
+              PLeft l -> self # (l <> root') # xs
+              PRight r -> self # (root' <> r) # xs
+     in go # (phash # bs)
+
+-- member :: BuiltinByteString -> Hash -> Proof -> Bool
+-- member e root = go (hash e)
+--  where
+--   go root' = \case
+--     [] -> root' == root
+--     Left l : q -> go (combineHash l root') q
+--     Right r : q -> go (combineHash root' r) q
+
+-- test :: Integer -> Maybe Integer -> Bool
+-- test _i = go (_i)
+--   where
+--     go (_i') = \case
+--       Just _ -> True
+--       Nothing -> False
 
 phash :: forall (s :: S). Term s (PByteString :--> PHash)
 phash = phoistAcyclic $ plam $ \bs ->
