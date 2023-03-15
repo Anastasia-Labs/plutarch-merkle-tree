@@ -118,6 +118,7 @@ library
     , plutus-tx
     , ply-core
     , ply-plutarch
+    , prettyprinter
     , serialise
     , text
 
