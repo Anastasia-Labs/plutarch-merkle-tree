@@ -1,15 +1,15 @@
-module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..), phash, pmember, mkProof, proof, isMember) where
+module Plutarch.MerkleTree (validator, PHash (PHash), PMerkleTree (..), phash, pmember, mkProof, proof, isMember, _pdrop) where
 
-import Plutarch.Api.V2 (
-  PValidator,
- )
+import Plutarch.Api.V2
+  ( PValidator,
+  )
 import Plutarch.Extra.Applicative ((#<!>))
 import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
+-- import Plutarch.Bool (PPartialOrd)
+import "plutarch-extra" Plutarch.Extra.List (preverse)
 import Plutarch.Maybe (pfromJust)
 import Plutarch.Prelude
 
--- import Plutarch.Bool (PPartialOrd)
--- import "plutarch-extra" Plutarch.Extra.List (preverse)
 -- import Numeric.Natural (Natural)
 
 newtype PHash (s :: S) = PHash (Term s PByteString)
@@ -58,29 +58,37 @@ instance PEq PMerkleTree where
       # l'
       # r'
 
-_pfromList :: forall (s :: S). Term s (PList PByteString :--> PMerkleTree)
+_pdrop :: (PIsListLike list a) => Term s (PInteger) -> Term s (list a) -> Term s (list a)
+_pdrop n xs = pdrop' # n # xs
+  where
+    pdrop' :: (PIsListLike list a) => Term s (PInteger :--> list a :--> list a)
+    pdrop' = pfix #$ plam $ \self i ls ->
+      pif
+        (i #== 0)
+        ls
+        $ pif
+          (i #== 1)
+          (ptail # ls)
+        $ self # (i - 1) # (ptail # ls)
+
+_pfromList :: forall {s :: S}.  Term s (PBuiltinList PByteString :--> PMerkleTree)
 _pfromList = phoistAcyclic $
   plam $ \x ->
     let go = pfix #$ plam $ \_self len list ->
           pmatch list $ \case
-            PSNil -> pcon PMerkleEmpty
+            PNil -> pcon PMerkleEmpty
             ls ->
               pif
                 (pisSingleton #$ pcon ls)
-                -- (pmatch (pcon ls ) $ \(PSCons v _) -> pcon $ PMerkleLeaf (phash # v) v)
                 (plet (phead #$ pcon ls) $ \v -> pcon $ PMerkleLeaf (phash # v) v)
                 ( plet (pdiv # len # 2) $ \_cutoff ->
-                    -- let left = pdrop (cutoff ) $ preverse # pcon ls
-                    -- in
-                    pcon PMerkleEmpty
-                    -- let left = preverse $ pdrop cutoff $ preverse ls
-                    --     right = pdrop cutoff ls
-                    --     leftnode = self # cutoff # left
-                    --     rightnode = self # cutoff # right
-                    --  in PMerkleNode (prootHash # leftnode) leftnode rightnode
+                    let _left = preverse #$ _pdrop (_cutoff) $ preverse # pcon ls
+                        right = _pdrop _cutoff $ pcon ls
+                        leftnode = _self # _cutoff # _left
+                        rightnode = _self # _cutoff # right
+                     in pcon $ PMerkleNode (prootHash # leftnode <> prootHash # rightnode) leftnode rightnode
                 )
-     in -- (undefined)
-        go # (plength # x) # x
+     in go # (plength # x) # x
 
 type PProof = PList (PEither PHash PHash)
 
