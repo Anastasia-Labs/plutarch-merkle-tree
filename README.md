@@ -8,6 +8,6 @@ myProof = fromJust $ mkProof (PlutusTx.Prelude.encodeUtf8 "2") myMerkleTree
 ```
 
 ```
-member (PlutusTx.Prelude.encodeUtf8 "2") rh p
+member (PlutusTx.Prelude.encodeUtf8 "2") myRootHash myProof
 
 ```
