@@ -1,29 +1,29 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Plutarch.MerkleTree
-  ( validator,
-    PHash (PHash),
-    PMerkleTree (..),
-    phash,
-    pmember,
-    pmkProof,
-    proof,
-    isMember,
-    _pdrop,
-    Proof,
-    fromList,
-    toList,
-    isNull,
-    size,
-    mkProof,
-    member,
-  )
+module Plutarch.MerkleTree (
+  validator,
+  PHash (PHash),
+  PMerkleTree (..),
+  phash,
+  pmember,
+  pmkProof,
+  proof,
+  isMember,
+  _pdrop,
+  Proof,
+  fromList,
+  toList,
+  isNull,
+  size,
+  mkProof,
+  member,
+)
 where
 
 import Control.Applicative ((<|>))
-import Plutarch.Api.V2
-  ( PValidator,
-  )
+import Plutarch.Api.V2 (
+  PValidator,
+ )
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import Plutarch.Extra.Applicative ((#<!>))
 import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
@@ -239,11 +239,12 @@ instance Eq MerkleTree where
   (MerkleNode h0 _ _) == (MerkleNode h1 _ _) = h0 == h1
   _ == _ = False
 
--- | Construct a 'MerkleTree' from a list of serialized data as
--- 'BuiltinByteString'.
---
--- Note that, while this operation is doable on-chain, it is expensive and
--- preferably done off-chain.
+{- | Construct a 'MerkleTree' from a list of serialized data as
+ 'BuiltinByteString'.
+
+ Note that, while this operation is doable on-chain, it is expensive and
+ preferably done off-chain.
+-}
 fromList :: [BuiltinByteString] -> MerkleTree
 fromList es0 = recursively (PlutusTx.Foldable.length es0) es0
   where
@@ -260,10 +261,11 @@ fromList es0 = recursively (PlutusTx.Foldable.length es0) es0
               rnode = recursively (len - cutoff) r
            in MerkleNode (combineHash (rootHash lnode) (rootHash rnode)) lnode rnode
 
--- | Deconstruct a 'MerkleTree' back to a list of elements.
---
--- >>> toList (fromList xs) == xs
--- True
+{- | Deconstruct a 'MerkleTree' back to a list of elements.
+
+ >>> toList (fromList xs) == xs
+ True
+-}
 toList :: MerkleTree -> [BuiltinByteString]
 toList = go
   where
@@ -289,8 +291,9 @@ size = \case
   MerkleNode _ l r -> size l + size r
   MerkleLeaf {} -> 1
 
--- | Construct a membership 'Proof' from an element and a 'MerkleTree'. Returns
--- 'Nothing' if the element isn't a member of the tree to begin with.
+{- | Construct a membership 'Proof' from an element and a 'MerkleTree'. Returns
+ 'Nothing' if the element isn't a member of the tree to begin with.
+-}
 mkProof :: BuiltinByteString -> MerkleTree -> Maybe Proof
 mkProof e = go []
   where
@@ -305,10 +308,11 @@ mkProof e = go []
         go (Right (rootHash r) : es) l <|> go (Left (rootHash l) : es) r
 {-# INLINEABLE mkProof #-}
 
--- | Check whether a element is part of a 'MerkleTree' using only its root hash
--- and a 'Proof'. The proof is guaranteed to be in log(n) of the size of the
--- tree, which is why we are interested in such data-structure in the first
--- place.
+{- | Check whether a element is part of a 'MerkleTree' using only its root hash
+ and a 'Proof'. The proof is guaranteed to be in log(n) of the size of the
+ tree, which is why we are interested in such data-structure in the first
+ place.
+-}
 member :: BuiltinByteString -> Hash -> Proof -> Bool
 member e root = go (hash e)
   where
@@ -323,8 +327,9 @@ hash :: BuiltinByteString -> Hash
 hash = Hash . sha2_256
 {-# INLINEABLE hash #-}
 
--- | Combines two hashes digest into a new one. This is effectively a new hash
--- digest of the same length.
+{- | Combines two hashes digest into a new one. This is effectively a new hash
+ digest of the same length.
+-}
 combineHash :: Hash -> Hash -> Hash
 combineHash (Hash h) (Hash h') = hash (appendByteString h h')
 {-# INLINEABLE combineHash #-}
@@ -354,8 +359,8 @@ newtype PMyRedeemer (s :: S)
       ( Term
           s
           ( PDataRecord
-              '[ "myProof" ':= PProof',
-                 "mserData" ':= PByteString
+              '[ "myProof" ':= PProof'
+               , "userData" ':= PByteString
                ]
           )
       )
