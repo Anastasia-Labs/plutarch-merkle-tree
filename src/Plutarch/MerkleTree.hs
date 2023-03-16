@@ -69,6 +69,7 @@ newtype Hash = Hash BuiltinByteString
 
 PlutusTx.makeIsDataIndexed ''Hash [('Hash, 0)]
 
+-- FIXME: Implement Data Record instead
 newtype PHash (s :: S) = PHash (Term s PByteString)
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PEq, PPartialOrd, POrd, PShow)
