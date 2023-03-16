@@ -1,6 +1,7 @@
 module Utils (
   evalT,
   evalSerialize,
+  evalWithArgsT,
   phasOneCurrecySymbolOneTokenName,
   phasScriptHash,
   writePlutusScript,

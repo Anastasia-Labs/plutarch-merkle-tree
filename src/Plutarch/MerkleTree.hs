@@ -1,44 +1,50 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Plutarch.MerkleTree (
-  validator,
-  PHash (PHash),
-  PMerkleTree (..),
-  phash,
-  pmember,
-  pmkProof,
-  proof,
-  isMember,
-  _pdrop,
-  Proof,
-  fromList,
-  toList,
-  isNull,
-  size,
-  mkProof,
-  member,
-)
+module Plutarch.MerkleTree
+  ( validator,
+    PHash (PHash),
+    PMerkleTree (..),
+    phash,
+    pmember,
+    pmkProof,
+    proof,
+    isMember,
+    _pdrop,
+    Proof,
+    fromList,
+    toList,
+    isNull,
+    size,
+    mkProof,
+    member,
+  )
 where
 
 import Control.Applicative ((<|>))
-import Plutarch.Api.V2 (
-  PValidator,
- )
-import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData))
+import Plutarch.Api.V2
+  ( PValidator,
+  )
+import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import Plutarch.Extra.Applicative ((#<!>))
 import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
 import "plutarch-extra" Plutarch.Extra.List (preverse)
+import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletFieldsC, ptraceC, ptryFromC)
 import Plutarch.Lift (DerivePConstantViaBuiltin (DerivePConstantViaBuiltin), PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
+import Plutarch.List (pshowList)
 import Plutarch.Maybe (pfromJust)
 import Plutarch.Prelude
+import Plutarch.TryFrom (PTryFrom (PTryFromExcess, ptryFrom'))
+import Plutarch.Unsafe (punsafeCoerce)
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, divideInteger, sha2_256)
 import PlutusTx.Foldable qualified
 import PlutusTx.Prelude qualified
 
-data PEitherData a b (s :: S)
+-- PEitherData for Data type, similar to PMaybeData
+
+data PEitherData (a :: PType) (b :: PType) (s :: S)
   = PDLeft (Term s (PDataRecord '["_0" ':= a]))
-  | PDRight (Term s (PDataRecord '["_1" ':= b]))
+  | PDRight (Term s (PDataRecord '["_0" ':= b]))
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PEq, PShow)
 
@@ -48,29 +54,41 @@ instance (PLiftData a, PLiftData b) => PUnsafeLiftDecl (PEitherData a b) where t
 
 deriving via (DerivePConstantViaData (Either a b) (PEitherData (PConstanted a) (PConstanted b))) instance (PConstantData a, PConstantData b) => PConstantDecl (Either a b)
 
+instance (PTryFrom PData a, PTryFrom PData b) => PTryFrom PData (PEitherData a b)
+
+instance (PTryFrom PData a, PTryFrom PData b) => PTryFrom PData (PAsData (PEitherData a b))
+
+-- Hash and PHash
+
 newtype Hash = Hash BuiltinByteString
   deriving stock (Show, Eq, Ord)
   deriving newtype (PlutusTx.ToData, PlutusTx.FromData)
 
 newtype PHash (s :: S) = PHash (Term s PByteString)
   deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PEq, PShow)
+  deriving anyclass (PlutusType, PIsData, PEq, PPartialOrd, POrd, PShow)
 
 instance DerivePlutusType PHash where type DPTStrat _ = PlutusTypeNewtype
 
 instance PUnsafeLiftDecl PHash where type PLifted PHash = Hash
 
-instance PTryFrom PData (PAsData PHash)
-
 deriving via (DerivePConstantViaBuiltin Hash PHash PByteString) instance PConstantDecl Hash
+
+-- instance PTryFrom PData (PAsData PHash)
+
+instance PTryFrom PData (PAsData PHash) where
+  type PTryFromExcess PData (PAsData PHash) = Flip Term PHash
+  ptryFrom' opq = runTermCont $ do
+    unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
+    tcont $ \f ->
+      pif (plengthBS # unwrapped #<= 32) (f ()) (ptraceError "ptryFrom(PHash): must be at most 32 Bytes long")
+    pure (punsafeCoerce opq, pcon . PHash $ unwrapped)
+
+newtype Flip f a b = Flip (f b a) deriving stock (Generic)
 
 type Proof = [Either Hash Hash]
 
-type PProof = PList (PEither PHash PHash)
-
--- instance PUnsafeLiftDecl ( PList (PEither PHash PHash) ) where type PLifted ( PList (PEither PHash PHash) ) _ = Proof
-
--- deriving via (DerivePConstantViaData (Either a b) (PEither (PConstanted a) (PConstanted b))) instance ( PConstantData a, PConstantData b ) => PConstantDecl (Either a b)
+type PProof = PBuiltinList (PEitherData PHash PHash)
 
 instance Semigroup (Term s PHash) where
   x' <> y' =
@@ -171,26 +189,29 @@ pmkProof = phoistAcyclic $
                 (h #== he)
                 (pcon $ PJust es)
                 (pcon PNothing)
-            PMerkleNode _ l r -> (self # pcon (PSCons (pcon $ PRight (prootHash # r)) es) # l) #<!> (self # pcon (PSCons (pcon $ PLeft (prootHash # l)) es) # r)
-     in go # pcon PSNil
+            PMerkleNode _ l r ->
+              (self # pcon (PCons (pcon $ PDRight (pdcons @"_0" # pdata (prootHash # r) # pdnil)) es) # l)
+                #<!> (self # pcon (PCons (pcon $ PDLeft (pdcons @"_0" # pdata (prootHash # l) # pdnil)) es) # r)
+     in go # pcon PNil
 
 pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
 pmember = phoistAcyclic $
   plam $ \bs root ->
     let go = pfix #$ plam $ \self root' proof ->
           pmatch proof $ \case
-            PSNil -> root' #== root
-            PSCons x xs -> pmatch x $ \case
-              PLeft l -> self # (l <> root') # xs
-              PRight r -> self # (root' <> r) # xs
+            PNil -> root' #== root
+            PCons x xs -> pmatch x $ \case
+              PDLeft l -> plet (pfield @"_0" # l <> root') $ \l' ->
+                -- FIXME: use combinaHash
+                self # (l' <> root') # xs
+              PDRight r -> plet (pfield @"_0" # r) $ \r' ->
+                -- FIXME: use combineHash
+                self # (root' <> r') # xs
      in go # (phash # bs)
 
 phash :: forall (s :: S). Term s (PByteString :--> PHash)
 phash = phoistAcyclic $ plam $ \bs ->
   pcon $ PHash (psha2_256 # bs)
-
-validator :: ClosedTerm PValidator
-validator = plam $ \_ _ _ -> popaque $ pconstant True
 
 mt :: forall {s :: S}. Term s PMerkleTree
 mt = pcon $ PMerkleLeaf (phash #$ phexByteStr "41") (phexByteStr "41")
@@ -218,12 +239,11 @@ instance Eq MerkleTree where
   (MerkleNode h0 _ _) == (MerkleNode h1 _ _) = h0 == h1
   _ == _ = False
 
-{- | Construct a 'MerkleTree' from a list of serialized data as
- 'BuiltinByteString'.
-
- Note that, while this operation is doable on-chain, it is expensive and
- preferably done off-chain.
--}
+-- | Construct a 'MerkleTree' from a list of serialized data as
+-- 'BuiltinByteString'.
+--
+-- Note that, while this operation is doable on-chain, it is expensive and
+-- preferably done off-chain.
 fromList :: [BuiltinByteString] -> MerkleTree
 fromList es0 = recursively (PlutusTx.Foldable.length es0) es0
   where
@@ -240,11 +260,10 @@ fromList es0 = recursively (PlutusTx.Foldable.length es0) es0
               rnode = recursively (len - cutoff) r
            in MerkleNode (combineHash (rootHash lnode) (rootHash rnode)) lnode rnode
 
-{- | Deconstruct a 'MerkleTree' back to a list of elements.
-
- >>> toList (fromList xs) == xs
- True
--}
+-- | Deconstruct a 'MerkleTree' back to a list of elements.
+--
+-- >>> toList (fromList xs) == xs
+-- True
 toList :: MerkleTree -> [BuiltinByteString]
 toList = go
   where
@@ -270,9 +289,8 @@ size = \case
   MerkleNode _ l r -> size l + size r
   MerkleLeaf {} -> 1
 
-{- | Construct a membership 'Proof' from an element and a 'MerkleTree'. Returns
- 'Nothing' if the element isn't a member of the tree to begin with.
--}
+-- | Construct a membership 'Proof' from an element and a 'MerkleTree'. Returns
+-- 'Nothing' if the element isn't a member of the tree to begin with.
 mkProof :: BuiltinByteString -> MerkleTree -> Maybe Proof
 mkProof e = go []
   where
@@ -287,11 +305,10 @@ mkProof e = go []
         go (Right (rootHash r) : es) l <|> go (Left (rootHash l) : es) r
 {-# INLINEABLE mkProof #-}
 
-{- | Check whether a element is part of a 'MerkleTree' using only its root hash
- and a 'Proof'. The proof is guaranteed to be in log(n) of the size of the
- tree, which is why we are interested in such data-structure in the first
- place.
--}
+-- | Check whether a element is part of a 'MerkleTree' using only its root hash
+-- and a 'Proof'. The proof is guaranteed to be in log(n) of the size of the
+-- tree, which is why we are interested in such data-structure in the first
+-- place.
 member :: BuiltinByteString -> Hash -> Proof -> Bool
 member e root = go (hash e)
   where
@@ -306,9 +323,75 @@ hash :: BuiltinByteString -> Hash
 hash = Hash . sha2_256
 {-# INLINEABLE hash #-}
 
-{- | Combines two hashes digest into a new one. This is effectively a new hash
- digest of the same length.
--}
+-- | Combines two hashes digest into a new one. This is effectively a new hash
+-- digest of the same length.
 combineHash :: Hash -> Hash -> Hash
 combineHash (Hash h) (Hash h') = hash (appendByteString h h')
 {-# INLINEABLE combineHash #-}
+
+-- Validator Test
+
+newtype PMyDatum (s :: S)
+  = PMyDatum
+      ( Term
+          s
+          ( PDataRecord
+              '[ "mekleRootHash" ':= PHash
+               ]
+          )
+      )
+  deriving stock (Generic)
+  deriving anyclass (PlutusType, PIsData, PDataFields, PShow)
+
+instance DerivePlutusType PMyDatum where type DPTStrat _ = PlutusTypeData
+
+instance PTryFrom PData PMyDatum
+
+type PProof' = PBuiltinList (PAsData (PEitherData PData PData))
+
+newtype PMyRedeemer (s :: S)
+  = PMyRedeemer
+      ( Term
+          s
+          ( PDataRecord
+              '[ "myProof" ':= PProof',
+                 "mserData" ':= PByteString
+               ]
+          )
+      )
+  deriving stock (Generic)
+  deriving anyclass (PlutusType, PIsData, PDataFields, PShow)
+
+instance DerivePlutusType PMyRedeemer where type DPTStrat _ = PlutusTypeData
+
+instance PTryFrom PData PMyRedeemer
+
+validator :: ClosedTerm PValidator
+validator = plam $ \_ r _ -> unTermCont $ do
+  myRed <- fst <$> ptryFromC @PMyRedeemer r
+  myRedF <- pletFieldsC @["myProof", "userData"] myRed
+  ptraceC $ pshowList # pfromData myRedF.myProof
+  pure $ popaque $ pconstant True
+
+-- type PProof' = PBuiltinList (PAsData (PEitherData PData PData))
+--
+-- validator :: ClosedTerm PValidator
+-- validator = plam $ \_ r _ -> unTermCont $ do
+--   _test <- pfromData . fst <$> ptryFromC @(PAsData PProof') r
+--   let _x =
+--         precList
+--           ( \self x xs -> plet (pfromData x) $ \x' ->
+--               pmatch x' $ \case
+--                 PDLeft l ->
+--                   plet (pfromData $ pfield @"_0" # l) $ \l' ->
+--                     ptryFrom @(PAsData PHash) l' $ \(l'', _) ->
+--                       ptrace ( pshow l'') (self # xs)
+--                 PDRight r ->
+--                   plet (pfromData $ pfield @"_0" # r) $ \r' ->
+--                     ptryFrom @(PAsData PHash) r' $ \(r'', _) ->
+--                       ptrace ( pshow r'') (self # xs)
+--           )
+--           (const _test)
+--           #$ _test
+--
+--   pure $ popaque $ pconstant True
