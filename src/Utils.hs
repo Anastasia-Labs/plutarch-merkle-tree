@@ -46,4 +46,3 @@ compileD x =
   case evalT x of
     Left e -> error (show e)
     Right (a, _, _) -> a
-
