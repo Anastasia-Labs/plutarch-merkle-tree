@@ -83,20 +83,22 @@ instance PTryFrom PData PHash
 
 type Proof = [Either Hash Hash]
 
-newtype PProof (s :: S)
-  = PProof
-      ( Term
-          s
-          (PBuiltinList (PAsData (PEitherData PHash PHash)))
-      )
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PShow)
+type PProof = PBuiltinList (PAsData (PEitherData PHash PHash))
 
-instance DerivePlutusType PProof where type DPTStrat _ = PlutusTypeNewtype
-
-instance PTryFrom PData (PAsData (PBuiltinList (PEitherData PHash PHash)))
-
-instance PTryFrom PData (PAsData PProof)
+-- newtype PProof (s :: S)
+--   = PProof
+--       ( Term
+--           s
+--           (PBuiltinList (PAsData (PEitherData PHash PHash)))
+--       )
+--   deriving stock (Generic)
+--   deriving anyclass (PlutusType, PIsData, PShow)
+--
+-- instance DerivePlutusType PProof where type DPTStrat _ = PlutusTypeNewtype
+--
+-- instance PTryFrom PData (PAsData (PBuiltinList (PEitherData PHash PHash)))
+--
+-- instance PTryFrom PData (PAsData PProof)
 
 instance Semigroup (Term s PHash) where
   x' <> y' =
@@ -203,20 +205,18 @@ _peitherOf = phoistAcyclic $
 
 pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
 pmember = phoistAcyclic $ plam $ \bs root proof ->
-  pmatch proof $ \case
-    PProof ls ->
-      let go = pfix #$ plam $ \self root' ls' ->
-            pmatch ls' $ \case
-              PNil -> root' #== root
-              PCons x xs ->
-                pmatch (pfromData x) $ \case
-                  PDLeft l ->
-                    plet (pfield @"_0" # l) $ \l' ->
-                      self # (pcombineHash # l' # root') # xs
-                  PDRight r ->
-                    plet (pfield @"_0" # r) $ \r' ->
-                      self # (pcombineHash # root' # r') # xs
-       in go # (phash # bs) # ls
+  let go = pfix #$ plam $ \self root' ls' ->
+        pmatch ls' $ \case
+          PNil -> root' #== root
+          PCons x xs ->
+            pmatch (pfromData x) $ \case
+              PDLeft l ->
+                plet (pfield @"_0" # l) $ \l' ->
+                  self # (pcombineHash # l' # root') # xs
+              PDRight r ->
+                plet (pfield @"_0" # r) $ \r' ->
+                  self # (pcombineHash # root' # r') # xs
+   in go # (phash # bs) # proof
 
 phash :: forall (s :: S). Term s (PByteString :--> PHash)
 phash = phoistAcyclic $ plam $ \bs ->
