@@ -1,21 +1,19 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Spec.MerkleTreeSpec (myMerkleTree, myRootHash, myProof, myDatum, myRedeemer, myProof2, myRedeemer2, scriptEvaluation, scriptEvaluation2) where
+module Spec.MerkleTreeSpec (myMerkleTree, myRootHash, myDatum, goodProof2, goodRedeemer2, unitTest) where
 
 import Data.Maybe (fromJust)
-import Data.Text (Text)
-import Plutarch (Script)
 import Plutarch.Api.V2 (PValidator)
 import Plutarch.DataRepr (DerivePConstantViaData (..), PDataFields)
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.MerkleTree (Hash, MerkleTree, PHash, PProof, Proof, fromList, mkProof, pmember, rootHash)
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (ExBudget)
+import Plutarch.Test.Precompiled (Expectation (Failure, Success), testEvalCase, tryFromPTerm)
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString)
 import PlutusTx.Prelude (encodeUtf8)
-import Utils (evalWithArgsT)
+import Test.Tasty (TestTree)
 
 -- Validator Test
 newtype MyDatum = MyDatum {merkleRoot :: Hash}
@@ -45,7 +43,7 @@ instance PUnsafeLiftDecl PMyDatum where type PLifted PMyDatum = MyDatum
 
 deriving via (DerivePConstantViaData MyDatum PMyDatum) instance (PConstantDecl MyDatum)
 
-data MyRedeemer = MyRedeemer {myProof :: Proof, userData :: BuiltinByteString}
+data MyRedeemer = MyRedeemer {goodProof :: Proof, userData :: BuiltinByteString}
   deriving stock (Generic, Eq, Show)
 
 PlutusTx.makeIsDataIndexed ''MyRedeemer [('MyRedeemer, 0)]
@@ -94,23 +92,57 @@ myMerkleTree = fromList $ encodeUtf8 <$> ["1", "2", "3"]
 myRootHash :: Hash
 myRootHash = rootHash myMerkleTree
 
-myProof :: Proof
-myProof = fromJust $ mkProof (encodeUtf8 "2") myMerkleTree
-
 myDatum :: MyDatum
 myDatum = MyDatum myRootHash
 
-myRedeemer :: MyRedeemer
-myRedeemer = MyRedeemer myProof (encodeUtf8 "2")
+goodProof1 :: Proof
+goodProof1 = fromJust $ mkProof (encodeUtf8 "1") myMerkleTree
 
-myProof2 :: Proof
-myProof2 = fromJust $ mkProof (encodeUtf8 "1") myMerkleTree
+goodRedeemer1 :: MyRedeemer
+goodRedeemer1 = MyRedeemer goodProof1 (encodeUtf8 "1")
 
-myRedeemer2 :: MyRedeemer
-myRedeemer2 = MyRedeemer myProof2 (encodeUtf8 "1")
+goodProof2 :: Proof
+goodProof2 = fromJust $ mkProof (encodeUtf8 "2") myMerkleTree
 
-scriptEvaluation :: Either Text (Script, ExBudget, [Text])
-scriptEvaluation = evalWithArgsT validator [PlutusTx.toData myDatum, PlutusTx.toData myRedeemer, PlutusTx.toData ()]
+goodRedeemer2 :: MyRedeemer
+goodRedeemer2 = MyRedeemer goodProof2 (encodeUtf8 "2")
 
-scriptEvaluation2 :: Either Text (Script, ExBudget, [Text])
-scriptEvaluation2 = evalWithArgsT validator [PlutusTx.toData myDatum, PlutusTx.toData myRedeemer2, PlutusTx.toData ()]
+goodProof3 :: Proof
+goodProof3 = fromJust $ mkProof (encodeUtf8 "3") myMerkleTree
+
+goodRedeemer3 :: MyRedeemer
+goodRedeemer3 = MyRedeemer goodProof3 (encodeUtf8 "3")
+
+badRedeemer4 :: MyRedeemer
+badRedeemer4 = MyRedeemer goodProof1 (encodeUtf8 "4")
+
+unitTest :: TestTree
+unitTest = tryFromPTerm "Merkle Tree Unit Test" validator $ do
+  testEvalCase
+    "Pass - Validation of member 1"
+    Success
+    [ PlutusTx.toData myDatum
+    , PlutusTx.toData goodRedeemer1
+    , PlutusTx.toData ()
+    ]
+  testEvalCase
+    "Pass - Validation of member 2"
+    Success
+    [ PlutusTx.toData myDatum
+    , PlutusTx.toData goodRedeemer2
+    , PlutusTx.toData ()
+    ]
+  testEvalCase
+    "Pass - Validation of member 3"
+    Success
+    [ PlutusTx.toData myDatum
+    , PlutusTx.toData goodRedeemer3
+    , PlutusTx.toData ()
+    ]
+  testEvalCase
+    "Fail - Validation of member 4"
+    Failure
+    [ PlutusTx.toData myDatum
+    , PlutusTx.toData badRedeemer4
+    , PlutusTx.toData ()
+    ]

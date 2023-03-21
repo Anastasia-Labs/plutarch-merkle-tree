@@ -1,9 +1,12 @@
 module Main (main) where
 
-import Spec.MerkleTreeSpec (scriptEvaluation)
+import Spec.MerkleTreeSpec (unitTest)
+import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()
 main = do
-  case scriptEvaluation of
-    Left a -> print a
-    Right b -> print b
+  defaultMain $
+    testGroup
+      "Unit Test Group"
+      [ unitTest
+      ]
