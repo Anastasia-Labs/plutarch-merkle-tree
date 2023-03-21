@@ -1,19 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-matches #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Plutarch.MerkleTree (
   validator,
   PHash (PHash),
   PMerkleTree (..),
   phash,
-  -- pmember,
-  -- pmkProof,
-  -- proof,
-  -- isMember,
+  pmember,
   _pdrop,
   Proof,
   fromList,
@@ -25,24 +19,23 @@ module Plutarch.MerkleTree (
   scriptEvaluation,
   myProof,
   myMerkleTree,
+  myProof2,
+  myRedeemer2,
+  scriptEvaluation2,
 )
 where
 
 import Control.Applicative ((<|>))
 import Data.Maybe (fromJust)
-import Plutarch.Api.V1 (PTxId)
 import Plutarch.Api.V2 (
   PValidator,
  )
-import Plutarch.Builtin (pasConstr, pasList)
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
 import "plutarch-extra" Plutarch.Extra.List (preverse)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, pmatchC, ptraceC, ptryFromC)
-import Plutarch.Lift (DerivePConstantViaBuiltin (DerivePConstantViaBuiltin), DerivePConstantViaNewtype (..), PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
+import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
+import Plutarch.Lift (DerivePConstantViaBuiltin (DerivePConstantViaBuiltin), PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
 import Plutarch.Prelude
-import Plutarch.TryFrom (PSubtype, PTryFrom, PTryFromExcess, ptryFrom, ptryFrom', pupcast, pupcastF)
-import Plutarch.Unsafe (punsafeCoerce)
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, divideInteger, sha2_256)
 import PlutusTx.Foldable qualified
@@ -67,31 +60,18 @@ instance (PTryFrom PData a, PTryFrom PData b) => PTryFrom PData (PEitherData a b
 
 instance (PTryFrom PData a, PTryFrom PData b) => PTryFrom PData (PAsData (PEitherData a b))
 
--- instance (PTryFrom PData (PAsData a ), PIsData a, PTryFrom PData (PAsData b ), PIsData b) => PTryFrom PData (PAsData (PEitherData a b))
---   where
---     type PTryFromExcess PData (PAsData (PEitherData a b)) = Flip Term (PEitherData a b)
---     ptryFrom' opq = runTermCont $ do
---       -- let eith :: Term _ (PEitherData PData PData)
---       --     eith = punsafeCoerce  opq
---       -- opq' <- pletC $ pasConstr # opq
---       -- flds <- pletC $ psndBuiltin # opq'
---       n <- pletC $ ptryFrom @(PAsData (PEitherData a b)) opq
---       pure (undefined)
-
 -- Hash and PHash
-newtype Flip f a b = Flip (f b a) deriving stock (Generic)
 
 newtype Hash = Hash BuiltinByteString
   deriving stock (Show, Eq, Ord)
 
 PlutusTx.makeIsDataIndexed ''Hash [('Hash, 0)]
 
--- FIXME: Implement Data Record instead
-newtype PHash (s :: S) = PHash (Term s PByteString)
+newtype PHash (s :: S) = PHash (Term s (PDataRecord '["_0" ':= PByteString]))
   deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PEq, PPartialOrd, POrd, PShow)
+  deriving anyclass (PlutusType, PIsData, PDataFields, PEq, PPartialOrd, POrd, PShow)
 
-instance DerivePlutusType PHash where type DPTStrat _ = PlutusTypeNewtype
+instance DerivePlutusType PHash where type DPTStrat _ = PlutusTypeData
 
 instance PUnsafeLiftDecl PHash where type PLifted PHash = Hash
 
@@ -99,39 +79,20 @@ deriving via (DerivePConstantViaBuiltin Hash PHash PByteString) instance PConsta
 
 instance PTryFrom PData (PAsData PHash)
 
--- instance PTryFrom PData (PAsData PHash) where
---   type PTryFromExcess PData (PAsData PHash) = Flip Term PHash
---   ptryFrom' opq = runTermCont $ do
---     unwrapped <- tcont . plet $ ptryFrom @(PAsData PByteString) opq snd
---     tcont $ \f ->
---       pif (plengthBS # unwrapped #<= 32) (f ()) (ptraceError "ptryFrom(PHash): must be at most 32 Bytes long")
---     pure (punsafeCoerce opq, pcon . PHash $ unwrapped)
---
--- newtype Flip f a b = Flip (f b a) deriving stock (Generic)
+instance PTryFrom PData PHash
 
 type Proof = [Either Hash Hash]
 
--- newtype Proof = Proof [Either Hash Hash]
--- deriving stock (Show, Eq, Ord)
-
--- PlutusTx.makeIsDataIndexed ''Proof [('Proof, 0)]
-
--- type PProof = PBuiltinList (PEitherData PHash PHash)
--- type PProof = PBuiltinList (PAsData (PEitherData (PAsData PHash) (PAsData PHash)))
 newtype PProof (s :: S)
   = PProof
       ( Term
           s
-          (PBuiltinList (PAsData (PEitherData PData PData)))
+          (PBuiltinList (PAsData (PEitherData PHash PHash)))
       )
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PShow)
 
 instance DerivePlutusType PProof where type DPTStrat _ = PlutusTypeNewtype
-
--- instance PUnsafeLiftDecl PProof where type PLifted PProof = Proof
-
--- deriving via (DerivePConstantViaNewtype Proof PProof (PBuiltinList (PEitherData PHash PHash))) instance (PConstantDecl Proof)
 
 instance PTryFrom PData (PAsData (PBuiltinList (PEitherData PHash PHash)))
 
@@ -140,15 +101,14 @@ instance PTryFrom PData (PAsData PProof)
 instance Semigroup (Term s PHash) where
   x' <> y' =
     phoistAcyclic
-      ( plam $ \x y -> pmatch x $ \(PHash h0) ->
-          pmatch y $ \(PHash h1) ->
-            pcon $ PHash (h0 <> h1)
+      ( plam $ \x y ->
+          pcon $ PHash $ pdcons # pdata (pfield @"_0" # x <> pfield @"_0" # y) # pdnil
       )
       # x'
       # y'
 
 instance Monoid (Term s PHash) where
-  mempty = pcon $ PHash mempty
+  mempty = pcon $ PHash $ pdcons # pdata mempty # pdnil
 
 data PMerkleTree (s :: S)
   = PMerkleEmpty
@@ -241,69 +201,31 @@ _peitherOf = phoistAcyclic $
 --                 #<!> (self # pcon (PCons (pcon $ PDLeft (pdcons @"_0" # pdata (prootHash # l) # pdnil)) es) # r)
 --      in go # pcon PNil
 
--- pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
--- pmember = phoistAcyclic $
---   plam $ \bs root ->
---     let go = pfix #$ plam $ \self root' proof ->
---           pmatch ( proof ) $ \case
---             PNil -> root' #== root
---             PCons x xs -> plet (pfromData x) $ \x' ->
---               pmatch x' $ \case
---                 PDLeft l ->
---                   plet (pfield @"_0" # l) $ \l' ->
---                     plet (punsafeCoerce l' :: Term _ (PAsData PHash)) $ \lh ->
---                       self # (pcombineHash # pfromData lh # root') # xs
---                 PDRight r ->
---                   plet (pfield @"_0" # r) $ \r' ->
---                     plet (punsafeCoerce r' :: Term _ (PAsData PHash)) $ \rh ->
---                       self # (pcombineHash # pfromData rh # root') # xs
---      in go # (phash # bs)
-
 pmember :: forall (s :: S). Term s (PByteString :--> PHash :--> PProof :--> PBool)
-pmember = phoistAcyclic $ plam $ \bs root proof -> pcon PTrue
-
--- pmatch proof $ \case
---   PProof ls ->
---     let go = pfix #$ plam $ \self root' ls' ->
---           pmatch ls' $ \case
---             PNil -> root' #== root
---             PCons x xs ->
---               pmatch (pfromData x) $ \case
---                 PDLeft l ->
---                   plet (pfield @"_0" # l) $ \l' -> unTermCont $ do
---                     lh <- fst <$> ptryFromC @(PAsData PHash) (pfromData l' )
---                     pure $ self # (pcombineHash # (pfromData lh ) # root') # xs
---                 PDRight r ->
---                   plet (pfield @"_0" # r) $ \r' -> unTermCont $ do
---                     rh <- fst <$> ptryFromC @(PAsData PHash) (pfromData r' )
---                     pure $ self # (pcombineHash # (pfromData rh ) # root') # xs
---       in go # (phash # bs) # ls
--- pmatch proof $ \case
---     PProof ls ->
---       let go = pfix #$ plam $ \self root' ls ->
---             pmatch ls $ \case
---               PNil ->
---                 root' #== root
---               PCons x xs ->
---                 pmatch x $ \case
---                   PDLeft l ->
---                     plet (pfield @"_0" # l) $ \l' ->
---                       self # (pcombineHash # l' # root') # xs
---                   PDRight l ->
---                     plet (pfield @"_0" # l) $ \l' ->
---                       self # (pcombineHash # l' # root') # xs
---        in go # (phash # bs) # ( ls )
+pmember = phoistAcyclic $ plam $ \bs root proof ->
+  pmatch proof $ \case
+    PProof ls ->
+      let go = pfix #$ plam $ \self root' ls' ->
+            pmatch ls' $ \case
+              PNil -> root' #== root
+              PCons x xs ->
+                pmatch (pfromData x) $ \case
+                  PDLeft l ->
+                    plet (pfield @"_0" # l) $ \l' ->
+                      self # (pcombineHash # l' # root') # xs
+                  PDRight r ->
+                    plet (pfield @"_0" # r) $ \r' ->
+                      self # (pcombineHash # root' # r') # xs
+       in go # (phash # bs) # ls
 
 phash :: forall (s :: S). Term s (PByteString :--> PHash)
 phash = phoistAcyclic $ plam $ \bs ->
-  pcon $ PHash (psha2_256 # bs)
+  pcon $ PHash $ pdcons # pdata (psha2_256 # bs) # pdnil
 
 pcombineHash :: Term s (PHash :--> PHash :--> PHash)
 pcombineHash = phoistAcyclic $
   plam $ \h1 h2 -> unTermCont $ do
-    PHash h1' <- pmatchC h1
-    PHash h2' <- pmatchC h2
-    pure $ phash # (h1' <> h2')
+    pure $ phash # (pfield @"_0" # h1 <> pfield @"_0" # h2)
 
 -- mt :: forall {s :: S}. Term s PMerkleTree
 -- mt = pcon $ PMerkleLeaf (phash #$ phexByteStr "41") (phexByteStr "41")
@@ -405,8 +327,6 @@ mkProof e = go []
  tree, which is why we are interested in such data-structure in the first
  place.
 -}
-
--- FIXME: USE PROOF AS TYPE !!!!
 member :: BuiltinByteString -> Hash -> Proof -> Bool
 member e root = go (hash e)
   where
@@ -431,7 +351,8 @@ combineHash (Hash h) (Hash h') = hash (appendByteString h h')
 -- Validator Test
 newtype MyDatum = MyDatum {merkleRoot :: Hash}
   deriving stock (Generic, Eq, Show)
-  deriving newtype (PlutusTx.ToData, PlutusTx.FromData)
+
+PlutusTx.makeIsDataIndexed ''MyDatum [('MyDatum, 0)]
 
 newtype PMyDatum (s :: S)
   = PMyDatum
@@ -448,6 +369,8 @@ newtype PMyDatum (s :: S)
 instance DerivePlutusType PMyDatum where type DPTStrat _ = PlutusTypeData
 
 instance PTryFrom PData PMyDatum
+
+instance PTryFrom PData (PAsData PMyDatum)
 
 instance PUnsafeLiftDecl PMyDatum where type PLifted PMyDatum = MyDatum
 
@@ -483,26 +406,15 @@ validator :: ClosedTerm PValidator
 validator = plam $ \d r _ -> unTermCont $ do
   dat <- fst <$> ptryFromC @PMyDatum d
   merkleRoot <- pletC $ pfield @"mekleRootHash" # dat
-  -- myRed <- pfromData . fst <$> ptryFromC @(PAsData (PProof) ) r
-  -- ptraceC $ pshow myRed
   myRed <- fst <$> ptryFromC @PMyRedeemer r
   myRedF <- pletFieldsC @["myProof", "userData"] myRed
   ptraceC $ pshow myRedF.myProof
-  -- myRed' <- pletC $ pmap # ( plam $ \x -> unTermCont $ do
-  -- x' <- fst <$> ptryFromC @(PAsData (PEitherData (PAsData PHash) (PAsData PHash)) ) x
-  -- pure x'
-  -- ) # myRed
-  -- PProof ls <- pmatchC $ pfromData myRedF.myProof
-  -- ptraceC $ pshow ls
-  ptraceC $ pshow (myRedF.userData)
-  -- ptraceC $ pshow merkleRoot
   isValid <- pletC $ pmember # myRedF.userData # merkleRoot # myRedF.myProof
   ptraceC $ pshow isValid
   pure $
     popaque $
       pif
         isValid
-        -- (pconstant True)
         (pconstant ())
         perror
 
@@ -522,28 +434,12 @@ myDatum = MyDatum myRootHash
 myRedeemer :: MyRedeemer
 myRedeemer = MyRedeemer myProof (PlutusTx.Prelude.encodeUtf8 "2")
 
+myProof2 :: Proof
+myProof2 = fromJust $ mkProof (PlutusTx.Prelude.encodeUtf8 "1") myMerkleTree
+
+myRedeemer2 :: MyRedeemer
+myRedeemer2 = MyRedeemer myProof2 (PlutusTx.Prelude.encodeUtf8 "1")
+
 scriptEvaluation = evalWithArgsT validator [PlutusTx.toData myDatum, PlutusTx.toData myRedeemer, PlutusTx.toData ()]
 
---
--- type PProof' = PBuiltinList (PAsData (PEitherData PData PData))
---
--- validator :: ClosedTerm PValidator
--- validator = plam $ \_ r _ -> unTermCont $ do
---   _test <- pfromData . fst <$> ptryFromC @(PAsData PProof') r
---   let _x =
---         precList
---           ( \self x xs -> plet (pfromData x) $ \x' ->
---               pmatch x' $ \case
---                 PDLeft l ->
---                   plet (pfromData $ pfield @"_0" # l) $ \l' ->
---                     ptryFrom @(PAsData PHash) l' $ \(l'', _) ->
---                       ptrace ( pshow l'') (self # xs)
---                 PDRight r ->
---                   plet (pfromData $ pfield @"_0" # r) $ \r' ->
---                     ptryFrom @(PAsData PHash) r' $ \(r'', _) ->
---                       ptrace ( pshow r'') (self # xs)
---           )
---           (const _test)
---           #$ _test
---
---   pure $ popaque $ pconstant True
+scriptEvaluation2 = evalWithArgsT validator [PlutusTx.toData myDatum, PlutusTx.toData myRedeemer2, PlutusTx.toData ()]
