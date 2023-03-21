@@ -93,13 +93,31 @@ common lang
 
   default-language:   GHC2021
 
+common test-dependencies
+  build-depends:
+    , base
+    , bytestring
+    , hedgehog
+    , hedgehog-quickcheck
+    , liqwid-plutarch-extra
+    , plutarch
+    , plutarch-context-builder
+    , plutarch-extra
+    , plutarch-quickcheck
+    , plutarch-unit
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , tasty
+    , tasty-hedgehog
+    , tasty-hunit
+    , text
+
 library
   import:          lang
   exposed-modules:
     Plutarch.MerkleTree
     Utils
-
-  -- Compile
 
   build-depends:
     , aeson
@@ -141,3 +159,11 @@ executable plutarch-merkletree
     , ply-plutarch
 
   hs-source-dirs: app
+
+test-suite plutarch-merkletree-test
+  import:         lang, test-dependencies
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  hs-source-dirs: test
+  other-modules:  Spec.MerkleTreeSpec
+  build-depends:  plutarch-merkletree

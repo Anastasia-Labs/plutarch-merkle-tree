@@ -3,44 +3,151 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Plutarch.MerkleTree (
-  validator,
   PHash (PHash),
   PMerkleTree (..),
+  PProof,
   phash,
   pmember,
   _pdrop,
   Proof,
+  Hash (Hash),
+  MerkleTree (..),
+  rootHash,
   fromList,
   toList,
   isNull,
   size,
   mkProof,
   member,
-  scriptEvaluation,
-  myProof,
-  myMerkleTree,
-  myProof2,
-  myRedeemer2,
-  scriptEvaluation2,
 )
 where
 
 import Control.Applicative ((<|>))
-import Data.Maybe (fromJust)
-import Plutarch.Api.V2 (
-  PValidator,
- )
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
 import "plutarch-extra" Plutarch.Extra.List (preverse)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
-import Plutarch.Lift (DerivePConstantViaBuiltin (DerivePConstantViaBuiltin), PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
+import Plutarch.Lift (PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
 import Plutarch.Prelude
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, divideInteger, sha2_256)
 import PlutusTx.Foldable qualified
 import PlutusTx.Prelude qualified
-import Utils (evalWithArgsT)
+
+-- Haskell types
+
+type Proof = [Either Hash Hash]
+
+newtype Hash = Hash BuiltinByteString
+  deriving stock (Show, Eq, Ord)
+
+PlutusTx.makeIsDataIndexed ''Hash [('Hash, 0)]
+
+data MerkleTree
+  = MerkleEmpty
+  | MerkleNode Hash MerkleTree MerkleTree
+  | MerkleLeaf Hash BuiltinByteString
+  deriving stock (Show)
+
+instance Eq MerkleTree where
+  MerkleEmpty == MerkleEmpty = True
+  (MerkleLeaf h0 _) == (MerkleLeaf h1 _) = h0 == h1
+  (MerkleNode h0 _ _) == (MerkleNode h1 _ _) = h0 == h1
+  _ == _ = False
+
+{- | Construct a 'MerkleTree' from a list of serialized data as
+ 'BuiltinByteString'.
+
+ Note that, while this operation is doable on-chain, it is expensive and
+ preferably done off-chain.
+-}
+fromList :: [BuiltinByteString] -> MerkleTree
+fromList es0 = recursively (PlutusTx.Foldable.length es0) es0
+  where
+    recursively len =
+      \case
+        [] ->
+          MerkleEmpty
+        [e] ->
+          MerkleLeaf (hash e) e
+        es ->
+          let cutoff = len `divideInteger` 2
+              (l, r) = (PlutusTx.Prelude.take cutoff es, PlutusTx.Prelude.drop cutoff es)
+              lnode = recursively cutoff l
+              rnode = recursively (len - cutoff) r
+           in MerkleNode (combineHash (rootHash lnode) (rootHash rnode)) lnode rnode
+
+{- | Deconstruct a 'MerkleTree' back to a list of elements.
+
+ >>> toList (fromList xs) == xs
+ True
+-}
+toList :: MerkleTree -> [BuiltinByteString]
+toList = go
+  where
+    go = \case
+      MerkleEmpty -> []
+      MerkleLeaf _ e -> [e]
+      MerkleNode _ n1 n2 -> toList n1 <> toList n2
+
+rootHash :: MerkleTree -> Hash
+rootHash = \case
+  MerkleEmpty -> hash ""
+  MerkleLeaf h _ -> h
+  MerkleNode h _ _ -> h
+
+isNull :: MerkleTree -> Bool
+isNull = \case
+  MerkleEmpty -> True
+  _ -> False
+
+size :: MerkleTree -> Integer
+size = \case
+  MerkleEmpty -> 0
+  MerkleNode _ l r -> size l + size r
+  MerkleLeaf {} -> 1
+
+{- | Construct a membership 'Proof' from an element and a 'MerkleTree'. Returns
+ 'Nothing' if the element isn't a member of the tree to begin with.
+-}
+mkProof :: BuiltinByteString -> MerkleTree -> Maybe Proof
+mkProof e = go []
+  where
+    he = hash e
+    go es = \case
+      MerkleEmpty -> Nothing
+      MerkleLeaf h _ ->
+        if h == he
+          then Just es
+          else Nothing
+      MerkleNode _ l r ->
+        go (Right (rootHash r) : es) l <|> go (Left (rootHash l) : es) r
+{-# INLINEABLE mkProof #-}
+
+{- | Check whether a element is part of a 'MerkleTree' using only its root hash
+ and a 'Proof'. The proof is guaranteed to be in log(n) of the size of the
+ tree, which is why we are interested in such data-structure in the first
+ place.
+-}
+member :: BuiltinByteString -> Hash -> Proof -> Bool
+member e root = go (hash e)
+  where
+    go root' = \case
+      [] -> root' == root
+      (Left l) : q -> go (combineHash l root') q
+      (Right r) : q -> go (combineHash root' r) q
+{-# INLINEABLE member #-}
+
+-- | Computes a SHA-256 hash of a given 'BuiltinByteString' message.
+hash :: BuiltinByteString -> Hash
+hash = Hash . sha2_256
+{-# INLINEABLE hash #-}
+
+{- | Combines two hashes digest into a new one. This is effectively a new hash
+ digest of the same length.
+-}
+combineHash :: Hash -> Hash -> Hash
+combineHash (Hash h) (Hash h') = hash (appendByteString h h')
+{-# INLINEABLE combineHash #-}
 
 -- PEitherData for Data type, similar to PMaybeData
 
@@ -60,12 +167,7 @@ instance (PTryFrom PData a, PTryFrom PData b) => PTryFrom PData (PEitherData a b
 
 instance (PTryFrom PData a, PTryFrom PData b) => PTryFrom PData (PAsData (PEitherData a b))
 
--- Hash and PHash
-
-newtype Hash = Hash BuiltinByteString
-  deriving stock (Show, Eq, Ord)
-
-PlutusTx.makeIsDataIndexed ''Hash [('Hash, 0)]
+type PProof = PBuiltinList (PAsData (PEitherData PHash PHash))
 
 newtype PHash (s :: S) = PHash (Term s (PDataRecord '["_0" ':= PByteString]))
   deriving stock (Generic)
@@ -75,30 +177,11 @@ instance DerivePlutusType PHash where type DPTStrat _ = PlutusTypeData
 
 instance PUnsafeLiftDecl PHash where type PLifted PHash = Hash
 
-deriving via (DerivePConstantViaBuiltin Hash PHash PByteString) instance PConstantDecl Hash
+deriving via (DerivePConstantViaData Hash PHash) instance PConstantDecl Hash
 
 instance PTryFrom PData (PAsData PHash)
 
 instance PTryFrom PData PHash
-
-type Proof = [Either Hash Hash]
-
-type PProof = PBuiltinList (PAsData (PEitherData PHash PHash))
-
--- newtype PProof (s :: S)
---   = PProof
---       ( Term
---           s
---           (PBuiltinList (PAsData (PEitherData PHash PHash)))
---       )
---   deriving stock (Generic)
---   deriving anyclass (PlutusType, PIsData, PShow)
---
--- instance DerivePlutusType PProof where type DPTStrat _ = PlutusTypeNewtype
---
--- instance PTryFrom PData (PAsData (PBuiltinList (PEitherData PHash PHash)))
---
--- instance PTryFrom PData (PAsData PProof)
 
 instance Semigroup (Term s PHash) where
   x' <> y' =
@@ -238,208 +321,3 @@ pcombineHash = phoistAcyclic $
 
 -- isMember :: forall {s :: S}. Term s PBool
 -- isMember = pmember # phexByteStr "41" # rh # proof
-
--- Haskell types
-
-data MerkleTree
-  = MerkleEmpty
-  | MerkleNode Hash MerkleTree MerkleTree
-  | MerkleLeaf Hash BuiltinByteString
-  deriving stock (Show)
-
-instance Eq MerkleTree where
-  MerkleEmpty == MerkleEmpty = True
-  (MerkleLeaf h0 _) == (MerkleLeaf h1 _) = h0 == h1
-  (MerkleNode h0 _ _) == (MerkleNode h1 _ _) = h0 == h1
-  _ == _ = False
-
-{- | Construct a 'MerkleTree' from a list of serialized data as
- 'BuiltinByteString'.
-
- Note that, while this operation is doable on-chain, it is expensive and
- preferably done off-chain.
--}
-fromList :: [BuiltinByteString] -> MerkleTree
-fromList es0 = recursively (PlutusTx.Foldable.length es0) es0
-  where
-    recursively len =
-      \case
-        [] ->
-          MerkleEmpty
-        [e] ->
-          MerkleLeaf (hash e) e
-        es ->
-          let cutoff = len `divideInteger` 2
-              (l, r) = (PlutusTx.Prelude.take cutoff es, PlutusTx.Prelude.drop cutoff es)
-              lnode = recursively cutoff l
-              rnode = recursively (len - cutoff) r
-           in MerkleNode (combineHash (rootHash lnode) (rootHash rnode)) lnode rnode
-
-{- | Deconstruct a 'MerkleTree' back to a list of elements.
-
- >>> toList (fromList xs) == xs
- True
--}
-toList :: MerkleTree -> [BuiltinByteString]
-toList = go
-  where
-    go = \case
-      MerkleEmpty -> []
-      MerkleLeaf _ e -> [e]
-      MerkleNode _ n1 n2 -> toList n1 <> toList n2
-
-rootHash :: MerkleTree -> Hash
-rootHash = \case
-  MerkleEmpty -> hash ""
-  MerkleLeaf h _ -> h
-  MerkleNode h _ _ -> h
-
-isNull :: MerkleTree -> Bool
-isNull = \case
-  MerkleEmpty -> True
-  _ -> False
-
-size :: MerkleTree -> Integer
-size = \case
-  MerkleEmpty -> 0
-  MerkleNode _ l r -> size l + size r
-  MerkleLeaf {} -> 1
-
-{- | Construct a membership 'Proof' from an element and a 'MerkleTree'. Returns
- 'Nothing' if the element isn't a member of the tree to begin with.
--}
-mkProof :: BuiltinByteString -> MerkleTree -> Maybe Proof
-mkProof e = go []
-  where
-    he = hash e
-    go es = \case
-      MerkleEmpty -> Nothing
-      MerkleLeaf h _ ->
-        if h == he
-          then Just es
-          else Nothing
-      MerkleNode _ l r ->
-        go (Right (rootHash r) : es) l <|> go (Left (rootHash l) : es) r
-{-# INLINEABLE mkProof #-}
-
-{- | Check whether a element is part of a 'MerkleTree' using only its root hash
- and a 'Proof'. The proof is guaranteed to be in log(n) of the size of the
- tree, which is why we are interested in such data-structure in the first
- place.
--}
-member :: BuiltinByteString -> Hash -> Proof -> Bool
-member e root = go (hash e)
-  where
-    go root' = \case
-      [] -> root' == root
-      (Left l) : q -> go (combineHash l root') q
-      (Right r) : q -> go (combineHash root' r) q
-{-# INLINEABLE member #-}
-
--- | Computes a SHA-256 hash of a given 'BuiltinByteString' message.
-hash :: BuiltinByteString -> Hash
-hash = Hash . sha2_256
-{-# INLINEABLE hash #-}
-
-{- | Combines two hashes digest into a new one. This is effectively a new hash
- digest of the same length.
--}
-combineHash :: Hash -> Hash -> Hash
-combineHash (Hash h) (Hash h') = hash (appendByteString h h')
-{-# INLINEABLE combineHash #-}
-
--- Validator Test
-newtype MyDatum = MyDatum {merkleRoot :: Hash}
-  deriving stock (Generic, Eq, Show)
-
-PlutusTx.makeIsDataIndexed ''MyDatum [('MyDatum, 0)]
-
-newtype PMyDatum (s :: S)
-  = PMyDatum
-      ( Term
-          s
-          ( PDataRecord
-              '[ "mekleRootHash" ':= PHash
-               ]
-          )
-      )
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PDataFields, PShow)
-
-instance DerivePlutusType PMyDatum where type DPTStrat _ = PlutusTypeData
-
-instance PTryFrom PData PMyDatum
-
-instance PTryFrom PData (PAsData PMyDatum)
-
-instance PUnsafeLiftDecl PMyDatum where type PLifted PMyDatum = MyDatum
-
-deriving via (DerivePConstantViaData MyDatum PMyDatum) instance (PConstantDecl MyDatum)
-
-data MyRedeemer = MyRedeemer {myProof :: Proof, userData :: BuiltinByteString}
-  deriving stock (Generic, Eq, Show)
-
-PlutusTx.makeIsDataIndexed ''MyRedeemer [('MyRedeemer, 0)]
-
-newtype PMyRedeemer (s :: S)
-  = PMyRedeemer
-      ( Term
-          s
-          ( PDataRecord
-              '[ "myProof" ':= PProof
-               , "userData" ':= PByteString
-               ]
-          )
-      )
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PDataFields, PShow)
-
-instance DerivePlutusType PMyRedeemer where type DPTStrat _ = PlutusTypeData
-
-instance PTryFrom PData PMyRedeemer
-
-instance PUnsafeLiftDecl PMyRedeemer where type PLifted PMyRedeemer = MyRedeemer
-
-deriving via (DerivePConstantViaData MyRedeemer PMyRedeemer) instance (PConstantDecl MyRedeemer)
-
-validator :: ClosedTerm PValidator
-validator = plam $ \d r _ -> unTermCont $ do
-  dat <- fst <$> ptryFromC @PMyDatum d
-  merkleRoot <- pletC $ pfield @"mekleRootHash" # dat
-  myRed <- fst <$> ptryFromC @PMyRedeemer r
-  myRedF <- pletFieldsC @["myProof", "userData"] myRed
-  ptraceC $ pshow myRedF.myProof
-  isValid <- pletC $ pmember # myRedF.userData # merkleRoot # myRedF.myProof
-  ptraceC $ pshow isValid
-  pure $
-    popaque $
-      pif
-        isValid
-        (pconstant ())
-        perror
-
--- Validator unit test
-myMerkleTree :: MerkleTree
-myMerkleTree = fromList $ PlutusTx.Prelude.encodeUtf8 <$> ["1", "2", "3"]
-
-myRootHash :: Hash
-myRootHash = rootHash myMerkleTree
-
-myProof :: Proof
-myProof = fromJust $ mkProof (PlutusTx.Prelude.encodeUtf8 "2") myMerkleTree
-
-myDatum :: MyDatum
-myDatum = MyDatum myRootHash
-
-myRedeemer :: MyRedeemer
-myRedeemer = MyRedeemer myProof (PlutusTx.Prelude.encodeUtf8 "2")
-
-myProof2 :: Proof
-myProof2 = fromJust $ mkProof (PlutusTx.Prelude.encodeUtf8 "1") myMerkleTree
-
-myRedeemer2 :: MyRedeemer
-myRedeemer2 = MyRedeemer myProof2 (PlutusTx.Prelude.encodeUtf8 "1")
-
-scriptEvaluation = evalWithArgsT validator [PlutusTx.toData myDatum, PlutusTx.toData myRedeemer, PlutusTx.toData ()]
-
-scriptEvaluation2 = evalWithArgsT validator [PlutusTx.toData myDatum, PlutusTx.toData myRedeemer2, PlutusTx.toData ()]
