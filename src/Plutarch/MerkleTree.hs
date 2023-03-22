@@ -5,6 +5,7 @@ module Plutarch.MerkleTree (
   PHash (PHash),
   PMerkleTree (PMerkleEmpty, PMerkleLeaf, PMerkleNode),
   PProof,
+  PEitherData (PDLeft, PDRight),
   phash,
   pmember,
   _pdrop,
