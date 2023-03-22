@@ -4,14 +4,14 @@
 
 module Plutarch.MerkleTree (
   PHash (PHash),
-  PMerkleTree (..),
+  PMerkleTree (PMerkleEmpty, PMerkleLeaf, PMerkleNode),
   PProof,
   phash,
   pmember,
   _pdrop,
   Proof,
   Hash (Hash),
-  MerkleTree (..),
+  MerkleTree (MerkleEmpty, MerkleLeaf, MerkleNode),
   rootHash,
   fromList,
   toList,
@@ -19,26 +19,31 @@ module Plutarch.MerkleTree (
   size,
   mkProof,
   member,
+  addLeaf,
 )
 where
 
 import Control.Applicative ((<|>))
+import Data.String (IsString)
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
 import "plutarch-extra" Plutarch.Extra.List (preverse)
 import Plutarch.Lift (PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
 import Plutarch.Prelude
+import PlutusLedgerApi.V2 (LedgerBytes (..))
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, divideInteger, sha2_256)
 import PlutusTx.Foldable qualified
 import PlutusTx.Prelude qualified
+import Prettyprinter (Pretty)
 
 -- Haskell types
 
 type Proof = [Either Hash Hash]
 
 newtype Hash = Hash BuiltinByteString
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Eq, Ord, Generic)
+  deriving (IsString, Show, Pretty) via LedgerBytes
 
 PlutusTx.makeIsDataIndexed ''Hash [('Hash, 0)]
 
@@ -148,6 +153,19 @@ hash = Hash . sha2_256
 combineHash :: Hash -> Hash -> Hash
 combineHash (Hash h) (Hash h') = hash (appendByteString h h')
 {-# INLINEABLE combineHash #-}
+
+addLeaf :: BuiltinByteString -> MerkleTree -> MerkleTree
+addLeaf newData MerkleEmpty = MerkleLeaf (hash newData) newData
+addLeaf newData (MerkleLeaf h dat) =
+  let newDataHash = hash newData
+      newLeaf = MerkleLeaf newDataHash newData
+   in MerkleNode (combineHash h newDataHash) (MerkleLeaf h dat) newLeaf
+addLeaf newData (MerkleNode h lnode rnode)
+  | size lnode == size rnode = MerkleNode newHash lnode (addLeaf newData rnode)
+  | size lnode > size rnode = MerkleNode newHash lnode (addLeaf newData rnode)
+  | otherwise = MerkleNode newHash (addLeaf newData lnode) rnode
+  where
+    newHash = combineHash (hash newData) h
 
 -- PEitherData for Data type, similar to PMaybeData
 
