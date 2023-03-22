@@ -1,7 +1,7 @@
 # MerkleTree 
 
 ## How to use
-```
+```haskell
 import Plutarch.MerkleTree
 import Data.Maybe
 import PlutusTx qualified
@@ -19,7 +19,7 @@ root = rootHash myMerkleTree
 
 ```
 # Plutarch On Chain
-```
+```haskell
 pmyProof = pmap # plam (\x -> pdata x) #$ pconstant myProof
 
 evalT $ pmember # (pconstant "e") # (pconstant root) # pmyProof
@@ -28,7 +28,7 @@ evalT $ pmember # (pconstant "e") # (pconstant root) # pmyProof
 
 # Haskell On Chain
 
-```
+```haskell
 member (PlutusTx.Prelude.encodeUtf8 "e") root myProof
 
 ```
