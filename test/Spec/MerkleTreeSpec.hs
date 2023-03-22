@@ -1,10 +1,18 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Spec.MerkleTreeSpec (myMerkleTree, myRootHash, myDatum, goodProof2, goodRedeemer2, unitTest) where
+module Spec.MerkleTreeSpec (
+  myMerkleTree,
+  myRootHash,
+  myDatum,
+  goodProof2,
+  goodRedeemer2,
+  unitTest,
+)
+where
 
 import Data.Maybe (fromJust)
 import Plutarch.Api.V2 (PValidator)
-import Plutarch.DataRepr (DerivePConstantViaData (..), PDataFields)
+import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.MerkleTree (Hash, MerkleTree, PHash, PProof, Proof, fromList, mkProof, pmember, rootHash)
@@ -43,7 +51,7 @@ instance PUnsafeLiftDecl PMyDatum where type PLifted PMyDatum = MyDatum
 
 deriving via (DerivePConstantViaData MyDatum PMyDatum) instance (PConstantDecl MyDatum)
 
-data MyRedeemer = MyRedeemer {goodProof :: Proof, userData :: BuiltinByteString}
+data MyRedeemer = MyRedeemer {myProof :: Proof, userData :: BuiltinByteString}
   deriving stock (Generic, Eq, Show)
 
 PlutusTx.makeIsDataIndexed ''MyRedeemer [('MyRedeemer, 0)]
@@ -96,25 +104,25 @@ myDatum :: MyDatum
 myDatum = MyDatum myRootHash
 
 goodProof1 :: Proof
-goodProof1 = fromJust $ mkProof (encodeUtf8 "1") myMerkleTree
+goodProof1 = fromJust $ mkProof "1" myMerkleTree
 
 goodRedeemer1 :: MyRedeemer
-goodRedeemer1 = MyRedeemer goodProof1 (encodeUtf8 "1")
+goodRedeemer1 = MyRedeemer goodProof1 "1"
 
 goodProof2 :: Proof
-goodProof2 = fromJust $ mkProof (encodeUtf8 "2") myMerkleTree
+goodProof2 = fromJust $ mkProof "2" myMerkleTree
 
 goodRedeemer2 :: MyRedeemer
-goodRedeemer2 = MyRedeemer goodProof2 (encodeUtf8 "2")
+goodRedeemer2 = MyRedeemer goodProof2 "2"
 
 goodProof3 :: Proof
-goodProof3 = fromJust $ mkProof (encodeUtf8 "3") myMerkleTree
+goodProof3 = fromJust $ mkProof "3" myMerkleTree
 
 goodRedeemer3 :: MyRedeemer
-goodRedeemer3 = MyRedeemer goodProof3 (encodeUtf8 "3")
+goodRedeemer3 = MyRedeemer goodProof3 "3"
 
 badRedeemer4 :: MyRedeemer
-badRedeemer4 = MyRedeemer goodProof1 (encodeUtf8 "4")
+badRedeemer4 = MyRedeemer goodProof1 "4"
 
 unitTest :: TestTree
 unitTest = tryFromPTerm "Merkle Tree Unit Test" validator $ do

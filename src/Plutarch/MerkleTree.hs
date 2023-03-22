@@ -1,5 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Plutarch.MerkleTree (
@@ -30,7 +29,7 @@ import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
 import "plutarch-extra" Plutarch.Extra.List (preverse)
 import Plutarch.Lift (PConstantDecl (PConstanted), PLifted, PUnsafeLiftDecl (..))
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (LedgerBytes (..))
+import PlutusLedgerApi.V2 (LedgerBytes (LedgerBytes))
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, divideInteger, sha2_256)
 import PlutusTx.Foldable qualified
@@ -326,7 +325,8 @@ phash = phoistAcyclic $ plam $ \bs ->
 pcombineHash :: Term s (PHash :--> PHash :--> PHash)
 pcombineHash = phoistAcyclic $
   plam $ \h1 h2 -> unTermCont $ do
-    pure $ phash # (pfield @"_0" # h1 <> pfield @"_0" # h2)
+    pure $
+      phash # (pfield @"_0" # h1 <> pfield @"_0" # h2)
 
 -- mt :: forall {s :: S}. Term s PMerkleTree
 -- mt = pcon $ PMerkleLeaf (phash #$ phexByteStr "41") (phexByteStr "41")
