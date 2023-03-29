@@ -116,7 +116,9 @@ common test-dependencies
 library
   import:          lang
   exposed-modules:
+    Plutarch.EitherData
     Plutarch.MerkleTree
+    Plutus.MerkleTree
     Utils
 
   build-depends:
@@ -141,24 +143,6 @@ library
     , text
 
   hs-source-dirs:  src
-
-executable plutarch-merkletree
-  import:         lang
-  main-is:        Main.hs
-
-  -- Modules included in this executable, other than Main.
-  -- other-modules:
-
-  -- LANGUAGE extensions used by modules in this package.
-  -- other-extensions:
-  build-depends:
-    , base
-    , data-default
-    , plutarch
-    , plutarch-merkletree
-    , ply-plutarch
-
-  hs-source-dirs: app
 
 test-suite plutarch-merkletree-test
   import:         lang, test-dependencies

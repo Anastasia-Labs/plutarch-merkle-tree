@@ -15,9 +15,10 @@ import Plutarch.Api.V2 (PValidator)
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
-import Plutarch.MerkleTree (Hash, MerkleTree, PHash, PProof, Proof, fromList, mkProof, pmember, rootHash)
+import Plutarch.MerkleTree (PHash, PProof, pmember)
 import Plutarch.Prelude
 import Plutarch.Test.Precompiled (Expectation (Failure, Success), testEvalCase, tryFromPTerm)
+import Plutus.MerkleTree (Hash, MerkleTree, Proof, fromList, mkProof, rootHash)
 import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString)
 import PlutusTx.Prelude (encodeUtf8)
