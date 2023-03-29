@@ -2,8 +2,9 @@
 
 ## How to use
 ```haskell
-import Plutarch.MerkleTree
-import Data.Maybe
+import Plutarch.MerkleTree (pmember)
+import Plutus.MerkleTree (fromList, mkProof, rootHash, member)
+import Data.Maybe (fromJust)
 import PlutusTx qualified
 import Plutarch.Prelude
 import Utils
