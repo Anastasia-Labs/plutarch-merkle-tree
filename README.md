@@ -33,3 +33,8 @@ evalT $ pmember # (pconstant "e") # (pconstant root) # pmyProof
 member (PlutusTx.Prelude.encodeUtf8 "e") root myProof
 
 ```
+
+
+This library takes the PlutusTx code from the Hydra project, developed and maintained by Input Output Hong Kong (IOHK).
+
+The repository can be found at https://github.com/input-output-hk/hydra/tree/master/plutus-merkle-tree
