@@ -19,10 +19,10 @@ import Plutarch (
 import Plutarch.Evaluate (
   evalScript,
  )
+import Plutarch.Prelude
 import "liqwid-plutarch-extra" Plutarch.Extra.Script (
   applyArguments,
  )
-import Plutarch.Prelude
 
 import PlutusLedgerApi.V2 (
   Data,
