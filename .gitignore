@@ -2,3 +2,4 @@ dist-newstyle
 *.plutus
 .direnv
 tmp
+.pre-commit-config.yaml

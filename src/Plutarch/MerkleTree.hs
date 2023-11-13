@@ -13,11 +13,11 @@ where
 
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import Plutarch.EitherData (PEitherData (PDLeft, PDRight))
-import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
-import "plutarch-extra" Plutarch.Extra.List (preverse)
 import Plutarch.Lift (PConstantDecl, PLifted, PUnsafeLiftDecl (..))
 import Plutarch.Prelude
 import Plutus.MerkleTree (Hash)
+import "liqwid-plutarch-extra" Plutarch.Extra.List (pisSingleton)
+import "plutarch-extra" Plutarch.Extra.List (preverse)
 
 type PProof = PBuiltinList (PAsData (PEitherData PHash PHash))
 

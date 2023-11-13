@@ -13,7 +13,6 @@ where
 import Data.Maybe (fromJust)
 import Plutarch.Api.V2 (PValidator)
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.MerkleTree (PHash, PProof, pmember)
 import Plutarch.Prelude
@@ -23,6 +22,7 @@ import PlutusTx qualified
 import PlutusTx.Builtins (BuiltinByteString)
 import PlutusTx.Prelude (encodeUtf8)
 import Test.Tasty (TestTree)
+import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
 
 -- Validator Test
 newtype MyDatum = MyDatum {merkleRoot :: Hash}
