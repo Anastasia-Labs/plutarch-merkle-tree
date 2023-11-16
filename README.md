@@ -3,11 +3,15 @@
 
 - [Plutarch Merkle Tree](#plutarch-merkle-tree)
   - [Introduction](#introduction)
+  - [Documentation](#documentation)
+    - [Merkle Tree](#merkle-tree)
+    - [Plutarch Merkle Tree](#plutarch-merkle-tree-implementation)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Building and Developing](#building-and-developing)
   - [Tutorial](#tutorial)
     - [How to use](#how-to-use)
+  - [Case study](#case-study)
 - [Acknowledgments](#acknowledgments)
 
 <!-- markdown-toc end -->
@@ -19,6 +23,84 @@
 The Plutarch Merkle Tree project provides a Plutarch-based implementation of Merkle Trees for the Cardano blockchain. This project allows developers to leverage the security and efficiency of Merkle Trees in their Cardano smart contracts, ensuring data integrity and efficient data verification.
 
 This project is funded by the Cardano Treasury in [Catalyst Fund 10](https://projectcatalyst.io/funds/10/f10-osde-open-source-dev-ecosystem/anastasia-labs-the-trifecta-of-data-structures-merkle-trees-tries-and-linked-lists-for-cutting-edge-contracts) and is aimed at enhancing the capabilities of Cardano smart contracts in handling complex data structures.
+
+## Documentation
+
+### Merkle Tree
+
+A Merkle tree, named after its inventor Ralph Merkle, is a fundamental data structure in computer science and cryptography. It's particularly well-suited for managing and verifying large data structures, especially in distributed systems like blockchain technologies. Here's a detailed explanation:
+
+#### Basic concept
+
+A Merkle tree is a type of binary tree, consisting of nodes. Here's how it's structured:
+
+- **Leaf Nodes**: These are the bottom-most nodes in the tree and contain hashed data. The data could be transactions (as in blockchain), files, or any data chunks.
+- **Non-Leaf (Intermediate) Nodes**: These nodes store a cryptographic hash of the combined data of their child nodes.
+- **Root Node**: The single node at the top of the tree contains a hash formed by its child nodes, ultimately representing the hashes of all lower levels.
+
+#### Hash function
+
+The core of a Merkle tree is the hash function (like SHA-256 in Bitcoin). This function takes digital data of any size and produces a fixed-size string of bytes, typically a unique digital fingerprint of the input data.
+
+#### Construction
+
+- **Hashing the Data**: First, each piece of data at the leaf level is hashed.
+- **Pairing and Hashing Upwards**: These hashes are then paired and concatenated, and the resultant string is hashed again. This process continues until you reach the single hash at the top - the root hash.
+- **Tree Structure**: This process creates a tree-like structure where each parent node is a hash of its children, providing a secure and efficient means of verifying the contents of the tree.
+
+#### Features
+
+- **Efficiency in Verification**: To verify any single data chunk's integrity, you don't need to download the entire tree. You only need the hashes of the nodes along the path from your data chunk to the root.
+- **Tamper-Proof**: Any change in a leaf node (data) will result in a completely different root hash through a cascading effect of changes in the intermediate hashes. This makes it easy to detect alterations.
+- **Concurrency Friendly**: Multiple branches of the tree can be processed simultaneously, making Merkle trees highly efficient for parallel processing.
+
+#### Example
+
+Consider a Merkle tree with four leaf nodes (A, B, C, D).
+
+```
+                      Merkle Root
+                            |
+                +-----------+-----------+
+                |                       |
+            Hash(A+B)               Hash(C+D)
+                |                       |
+            +---+---+               +---+---+
+            |       |               |       |
+            Hash(A) Hash(B)     Hash(C) Hash(D)
+```
+
+1. Each of A, B, C, and D is hashed: Hash(A), Hash(B), Hash(C), Hash(D).
+2. The hashes of A and B are combined and hashed: Hash(Hash(A) + Hash(B)). Similarly for C and D.
+3. The hash results from step 2 are combined and hashed to give the Merkle root.
+
+Thus, the Merkle root is a digest of all the data in the leaf nodes.
+
+In conclusion, Merkle trees offer a secure and efficient way to summarize and verify large data sets.
+
+### Plutarch Merkle Tree implementation
+
+The Plutarch Merkle Tree implementation provides several functions to create and manipulate Merkle Trees. Below is a brief overview of each function:
+
+-`fromList`: Constructs a Merkle Tree from a list of serialized data.
+
+-`toList`: Deconstructs a Merkle Tree back into a list of elements.
+
+-`rootHash`: Retrieves the root hash of a Merkle Tree.
+
+-`isNull`: Checks if a Merkle Tree is empty.
+
+-`size`: Returns the number of leaf nodes in a Merkle Tree.
+
+-`mkProof`: Generates a proof of membership for an element in the Merkle Tree.
+
+-`member`: Verifies if an element is part of a Merkle Tree using a proof.
+
+-`hash`: Computes a SHA-256 hash of a given byte string.
+
+-`combineHash`: Combines two hashes into a new one.
+
+-`addLeaf`: Adds a new leaf to the Merkle Tree.
 
 ## Getting Started
 
@@ -105,10 +187,15 @@ cabal test
 
 ![plutarch-merkle-tree.gif](/assets/images/plutarch-merkle-tree.gif)
 
-### Tutorial
-
+# Tutorial
 
 ## How to use
+
+This guide demonstrates how to use the Merkle Tree for blockchain applications using Plutarch and Plutus.
+
+### Setting up the environment
+
+First, ensure you have the necessary imports:
 
 ```haskell
 import Plutarch.MerkleTree (pmember)
@@ -117,19 +204,36 @@ import Data.Maybe (fromJust)
 import PlutusTx qualified
 import Plutarch.Prelude
 import Utils
-
--- Create your MerkleTree
-myMerkleTree = fromList ["a","b","c","d","e","f","g","h","1","2","3","4"]
-
--- Create your Proof for "e" member
-myProof = fromJust $ mkProof "e" myMerkleTree
-
--- Extract the Root Hash from MerkleTree
-root = rootHash myMerkleTree
-
 ```
 
-## Plutarch On Chain
+### Creating and Utilizing a Merkle Tree
+
+1.Constructing the Merkle Tree
+
+```haskell
+-- Create your MerkleTree
+myMerkleTree = fromList ["a","b","c","d","e","f","g","h","1","2","3","4"]
+```
+
+2.Gererating a Proof for a member
+
+To validate the presence of an element(e.g., "e"), generate a proof for it.
+
+```haskell
+-- Create your Proof for "e" member
+myProof = fromJust $ mkProof "e" myMerkleTree
+```
+
+3.Extracting the Root Hash
+Obtain the root hash of your Merkle Tree, which is used for verification.
+
+```haskell
+root = rootHash myMerkleTree
+```
+
+### Plutarch On Chain
+
+To perform validation on-chain using Plutarch, follow these steps:
 
 ```haskell
 pmyProof = pmap # plam (\x -> pdata x) #$ pconstant myProof
@@ -138,12 +242,30 @@ evalT $ pmember # (pconstant "e") # (pconstant root) # pmyProof
 
 ```
 
-## Haskell On Chain
+This script maps your Haskell proof to Plutarch data type and evaluates whether the element "e" is a member of the tree with the given root and proof
+
+### Haskell On Chain
+
+For on-chain validation using Plutus, using the following:
 
 ```haskell
 member (PlutusTx.Prelude.encodeUtf8 "e") root myProof
 
 ```
+
+This line of code checks if the string "e", after being converted to UTF-8 format, is a member of the Merkle Tree given the root and the proof.
+
+### Sample validator
+
+For a complete example, including tests and further explanations, reger to the provided sample validator: [MerkleTreeSpec.hs](/test/Spec/MerkleTreeSpec.hs).
+
+# Case study
+
+For an in-depth real-world case study on the application of Merkle Trees within the Cardano blockchain environment, particularly in the context of sidechain to main chain token transfers, refer to the following resource:
+
+[Cardano Sidechain Toolkit - Main Chain Plutus Scripts](https://docs.cardano.org/cardano-sidechains/sidechain-toolkit/mainchain-plutus-scripts/)
+
+This case study provides valuable insights into how Merkle Trees are integrated into blockchain transactions, offering practical examples and detailed workflows.
 
 # Acknowledgments
 
