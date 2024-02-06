@@ -11,6 +11,7 @@
     - [Building and Developing](#building-and-developing)
   - [Tutorial](#tutorial)
     - [How to use](#how-to-use)
+  - [Testing](#testing)
   - [Case study](#case-study)
 - [Acknowledgments](#acknowledgments)
 
@@ -258,6 +259,10 @@ This line of code checks if the string "e", after being converted to UTF-8 forma
 ### Sample validator
 
 For a complete example, including tests and further explanations, reger to the provided sample validator: [MerkleTreeSpec.hs](/test/Spec/MerkleTreeSpec.hs).
+
+## Testing
+
+For comprehensive information on testing the Plutarch Merkle Tree implementation, including unit tests and property-based tests, please refer to our [test documentation](/test/README.md).
 
 # Case study
 

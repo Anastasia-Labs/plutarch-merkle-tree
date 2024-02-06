@@ -72,7 +72,7 @@
 
       flake.hydraJobs.x86_64-linux = (
         self.checks.x86_64-linux
-        // self.packages.x86_64-linux
+        # // self.packages.x86_64-linux
       );
     };
 }

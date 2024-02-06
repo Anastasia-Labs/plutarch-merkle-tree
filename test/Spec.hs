@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Spec.MerkleTreeSpec (unitTest)
+import Spec.MerkleTreeSpec
 import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()
@@ -8,5 +8,6 @@ main = do
   defaultMain $
     testGroup
       "Unit Test Group"
-      [ unitTest
+      [ Spec.MerkleTreeSpec.unitTest
+      , Spec.MerkleTreeSpec.merkleTreeProperties
       ]
