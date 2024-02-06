@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Spec.MerkleTreeSpec (
   myMerkleTree,
@@ -7,21 +8,24 @@ module Spec.MerkleTreeSpec (
   goodProof2,
   goodRedeemer2,
   unitTest,
+  merkleTreeProperties,
 )
 where
 
-import Data.Maybe (fromJust)
+import Data.ByteString.Char8 (pack)
+import Data.Maybe (fromJust, isJust)
 import Plutarch.Api.V2 (PValidator)
 import Plutarch.DataRepr (DerivePConstantViaData (DerivePConstantViaData), PDataFields)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.MerkleTree (PHash, PProof, pmember)
 import Plutarch.Prelude
 import Plutarch.Test.Precompiled (Expectation (Failure, Success), testEvalCase, tryFromPTerm)
-import Plutus.MerkleTree (Hash, MerkleTree, Proof, fromList, mkProof, rootHash)
+import Plutus.MerkleTree (Hash, MerkleTree, Proof, fromList, member, mkProof, rootHash)
 import PlutusTx qualified
-import PlutusTx.Builtins (BuiltinByteString)
+import PlutusTx.Builtins (BuiltinByteString, toBuiltin)
 import PlutusTx.Prelude (encodeUtf8)
-import Test.Tasty (TestTree)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.QuickCheck qualified as QC
 import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pletC, pletFieldsC, ptraceC, ptryFromC)
 
 -- Validator Test
@@ -197,4 +201,39 @@ unitTest = tryFromPTerm "Merkle Tree Unit Test" validator $ do
     [ PlutusTx.toData myDatum
     , PlutusTx.toData badRedeemer4
     , PlutusTx.toData ()
+    ]
+
+-- Custom generator for BuiltinByteString from 'a'-'z' and '0'-'9'
+genBuiltinByteString :: QC.Gen BuiltinByteString
+genBuiltinByteString = do
+  member <- QC.listOf $ QC.elements (['a' .. 'z'] ++ ['0' .. '9'])
+  return $ toBuiltin . pack $ member
+
+genTreeElements :: QC.Gen [BuiltinByteString]
+genTreeElements = QC.listOf1 genBuiltinByteString -- Ensures at least one element is generated
+
+-- Property: Valid members should be verified successfully
+prop_validMemberVerified :: QC.Property
+prop_validMemberVerified = QC.forAll genTreeElements $ \elements ->
+  let tree = fromList elements
+   in QC.forAll (QC.elements elements) $ \m ->
+        -- Pick a member from the generated list
+        let maybeProof = mkProof m tree
+         in isJust maybeProof QC..&&. maybe False (member m (rootHash tree)) maybeProof QC.=== True
+
+-- Property: Invalid members should not be verified
+prop_invalidMemberRejected :: QC.Property
+prop_invalidMemberRejected = QC.forAll genTreeElements $ \elements ->
+  QC.forAll genBuiltinByteString $ \nonMember ->
+    notElem nonMember elements QC.==>
+      let tree = fromList elements
+          maybeProof = mkProof (head elements) tree -- Using a proof for a valid member
+       in maybe True (not . member nonMember (rootHash tree)) maybeProof QC.=== True
+
+merkleTreeProperties :: TestTree
+merkleTreeProperties =
+  testGroup
+    "Merkle Tree Properties"
+    [ QC.testProperty "Valid Member Verification" prop_validMemberVerified
+    , QC.testProperty "Invalid Member Rejection" prop_invalidMemberRejected
     ]

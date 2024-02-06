@@ -15,6 +15,11 @@ The unit tests for the Plutarch Merkle Tree are organized into a suite titled "M
 -**Pass - Validation of member 3**: Aims to validate member 3's inclusion in the Merkle Tree, confirming its correct positioning and validation.
 -**Fail - Validation of member 4**: Intentionally designed to fail, this test evaluates the Merkle Tree's validation mechanism by attempting to validate an incorrect or non-existent member 4.
 
+#### Properties based
+
+-**Valid Member Verification**: Validates that members known to be in the Merkle Tree are correctly verified, with their membership confirmed through generated proofs.
+-**Invalid Member Rejection**: Ensures that arbitrary strings not part of the Merkle Tree are appropriately rejected, even when using valid proofs for other members.
+
 ## Running the Tests
 
 To execute the Merkle Tree unit tests for the Plutarch project, you should follow the standard testing procedures outlined in the project documentation. Typically, this involves executing a command such as:
@@ -33,14 +38,21 @@ The tests for validating members 1, 2, and 3 within the Merkle Tree all passed, 
 The test for member 4's validation also passed but was designed as a negative test to ensure the system appropriately handles invalid or non-existent members.
 
 ```markdown
+Test suite plutarch-merkletree-test: RUNNING...
 Unit Test Group
   Merkle Tree Unit Test
-    Pass - Validation of member 1: OK (0.05s)
+    Pass - Validation of member 1: OK (0.02s)
     Pass - Validation of member 2: OK
     Pass - Validation of member 3: OK
     Fail - Validation of member 4: OK
+  Merkle Tree Properties
+    Valid Member Verification:     OK
+      +++ OK, passed 100 tests.
+    Invalid Member Rejection:      OK
+      +++ OK, passed 100 tests; 11 discarded.
 
-All 4 tests passed (0.05s)
+All 6 tests passed (0.05s)
+Test suite plutarch-merkletree-test: PASS
 ```
 
 ### Execution Time
