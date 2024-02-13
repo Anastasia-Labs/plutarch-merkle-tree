@@ -10,15 +10,19 @@ The unit tests for the Plutarch Merkle Tree are organized into a suite titled "M
 
 ### Tests Included
 
--**Pass - Validation of member 1**: This test confirms the correct validation of member 1 within the Merkle Tree, ensuring it is a legitimate part of the tree's structure.
--**Pass - Validation of member 2**: Focuses on verifying that member 2 is properly recognized and validated as a component of the Merkle Tree.
--**Pass - Validation of member 3**: Aims to validate member 3's inclusion in the Merkle Tree, confirming its correct positioning and validation.
--**Fail - Validation of member 4**: Intentionally designed to fail, this test evaluates the Merkle Tree's validation mechanism by attempting to validate an incorrect or non-existent member 4.
+- **Pass - Validation of member 1**: This test confirms the correct validation of member 1 within the Merkle Tree, ensuring it is a legitimate part of the tree's structure.
+
+- **Pass - Validation of member 2**: Focuses on verifying that member 2 is properly recognized and validated as a component of the Merkle Tree.
+
+- **Pass - Validation of member 3**: Aims to validate member 3's inclusion in the Merkle Tree, confirming its correct positioning and validation.
+
+- **Fail - Validation of member 4**: Intentionally designed to fail, this test evaluates the Merkle Tree's validation mechanism by attempting to validate an incorrect or non-existent member 4.
 
 #### Properties based
 
--**Valid Member Verification**: Validates that members known to be in the Merkle Tree are correctly verified, with their membership confirmed through generated proofs.
--**Invalid Member Rejection**: Ensures that arbitrary strings not part of the Merkle Tree are appropriately rejected, even when using valid proofs for other members.
+- **Valid Member Verification**: Validates that members known to be in the Merkle Tree are correctly verified, with their membership confirmed through generated proofs.
+
+- **Invalid Member Rejection**: Ensures that arbitrary strings not part of the Merkle Tree are appropriately rejected, even when using valid proofs for other members.
 
 ## Running the Tests
 
