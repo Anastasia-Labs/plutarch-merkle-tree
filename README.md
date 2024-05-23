@@ -188,6 +188,13 @@ cabal test
 
 ![plutarch-merkle-tree.gif](/assets/images/plutarch-merkle-tree.gif)
 
+## Demeter Workspace 
+
+To provide a seamless experience for running and trying out our application, click the workspace button below. This will start a workspace in Demeter with our repository code automatically cloned.
+
+
+[![Code in Workspace](https://demeter.run/code/badge.svg)](https://demeter.run/code?repository=https://github.com/Anastasia-Labs/plutarch-merkle-tree&template=plutus&size=large) 
+
 # Tutorial
 
 ## How to use
